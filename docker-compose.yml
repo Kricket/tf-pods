@@ -1,0 +1,18 @@
+version: '3.5'
+
+networks:
+  default:
+    name: tf
+
+services:
+  tf:
+    container_name: tf
+    image: "tensorflow/tensorflow:2.4.0rc4-jupyter"
+    ports:
+      - "8888:8888"
+    environment:
+      PYTHONPATH: "/pip:/src"
+    volumes:
+      - "./src/notebooks:/tf/notebooks"
+      - "./src/python:/src"
+      - "./pip:/pip"
