@@ -20,6 +20,7 @@ class PodWorld:
     def __init__(self):
         self.__generate_checks()
         self.players: List[Player] = []
+        self.turns = 0
 
     def __str__(self):
         checks = str(list(str(check) for check in self.checkpoints))
@@ -55,6 +56,7 @@ class PodWorld:
             play_input = PlayInput(pc.pod, self)
             play = pc.controller.play(play_input)
             self.update(pc.pod, play, pc.pod)
+        self.turns += 1
 
     def update(self, pod: PodInfo, play: PlayOutput, output: PodInfo):
         """
@@ -75,7 +77,7 @@ class PodWorld:
         :return: The new pod state
         """
         # 1. Rotation
-        requested_angle = (play.dir - pod.pos).angle()
+        requested_angle = (play.target - pod.pos).angle()
         angle = legal_angle(requested_angle, pod.angle)
         output.angle = angle
 
@@ -103,3 +105,15 @@ class PodWorld:
             if output.nextCheckId >= len(self.checkpoints):
                 output.nextCheckId = 0
                 output.laps += 1
+
+    def serialize(self):
+        state = []
+        for player in self.players:
+            state.append(player.pod.serialize())
+        state.append(self.turns)
+        return state
+
+    def deserialize(self, state):
+        for i in range(0, len(self.players)):
+            self.players[i].pod = PodInfo.deserialize(state[i])
+        self.turns = state[-1]

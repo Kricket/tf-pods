@@ -1,10 +1,8 @@
 import matplotlib.pyplot as plt
 import math
 
-from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.patches import Circle, Wedge
-
-from typing import List
 
 from constants import Constants
 from podutil import PodInfo
@@ -33,8 +31,12 @@ class Drawer:
         return angle_deg - 20, angle_deg + 20, center
 
     def __draw_pod(self, pod: PodInfo) -> Wedge:
+        # Come up with a color based on which player it is
+        idx = [index for index,pl in enumerate(self.world.players) if pl.pod == pod][0]
+        color = (idx * 12345 % 6789) / 6789.0
+        # Draw the wedge
         theta1, theta2, center = self.__pod_wedge_info(pod)
-        wedge = Wedge((center.x, center.y), Constants.pod_radius(), theta1, theta2, color = "red")
+        wedge = Wedge((center.x, center.y), Constants.pod_radius(), theta1, theta2, color = (color, 1 - color, 0.0))
         wedge.set_zorder(10)
         return wedge
 
@@ -59,7 +61,7 @@ class Drawer:
         return frames
 
 
-    def animate(self):
+    def animate(self, filename):
         self.__prepare()
 
         def draw_checks():
@@ -85,4 +87,4 @@ class Drawer:
 
         anim = FuncAnimation(plt.gcf(), do_animate, init_func = draw_checks, interval = 300, frames = frames, blit = True)
         plt.close(self.fig)
-        return anim
+        anim.save(filename, writer = PillowWriter(fps=10))

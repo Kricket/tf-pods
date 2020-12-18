@@ -59,6 +59,25 @@ class PodInfo:
                " angle=" + str(self.angle) +\
                " laps=" + str(self.laps)
 
+    def serialize(self):
+        return [
+            self.pos,
+            self.vel,
+            self.angle,
+            self.nextCheckId,
+            self.laps
+        ]
+
+    @staticmethod
+    def deserialize(state):
+        pi = PodInfo(state[0])
+        pi.vel = state[1]
+        pi.angle = state[2]
+        pi.nextCheckId = state[3]
+        pi.laps = state[4]
+        return pi
+
+
 class PlayInput:
     """
     All information provided to a controller at each turn
@@ -75,7 +94,8 @@ class PlayOutput:
     All information that a controller produces during a turn
     """
     def __init__(self):
-        self.dir = ORIGIN
+        # Point towards which we want to move
+        self.target = ORIGIN
         self.thrust = 0
 
 class Controller:
@@ -91,6 +111,6 @@ class SimpleController(Controller):
     """
     def play(self, pi: PlayInput) -> PlayOutput:
         out = PlayOutput()
-        out.dir = pi.nextCheck - (pi.vel * 2.0)
+        out.target = pi.nextCheck - (pi.vel * 2.0)
         out.thrust = 100
         return out
