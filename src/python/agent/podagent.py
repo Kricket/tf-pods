@@ -8,13 +8,13 @@ from typing import Any
 import tensorflow as tf
 import numpy as np
 from constants import Constants
-from podutil import PodInfo, Controller, PlayInput, PlayOutput
+from podutil import PodInfo, Controller, PlayInput, PlayOutput, clean_angle
 from podworld import PodWorld
 
 from tf_agents.environments import py_environment
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
-from vec2 import ORIGIN
+from vec2 import ORIGIN, EPSILON
 
 tf.compat.v1.enable_v2_behavior()
 
@@ -65,12 +65,19 @@ class PodEnvironment(py_environment.PyEnvironment):
             (3,),
             np.float,
             minimum=0,
-            maximum=Constants.world_x() * 2)
+            maximum=Constants.world_x() * 10)
 
         self._observation_spec = {
             'angles': angles_spec,
             'distances': dist_spec
         }
+
+        self._time_step_spec = ts.TimeStep(
+            step_type=array_spec.ArraySpec(shape=(), dtype=np.int32, name='step_type'),
+            reward=array_spec.ArraySpec(shape=(), dtype=np.float32, name='reward'),
+            discount=array_spec.ArraySpec(shape=(), dtype=np.float32, name='discount'),
+            observation=self._observation_spec
+        )
 
         self._world = world
         self._controller = AgentController()
@@ -97,6 +104,9 @@ class PodEnvironment(py_environment.PyEnvironment):
     def observation_spec(self):
         return self._observation_spec
 
+    def time_step_spec(self) -> ts.TimeStep:
+        return self._time_step_spec
+
     def _reset(self):
         self.set_state(self._initial_state)
         self._episode_ended = False
@@ -121,14 +131,14 @@ class PodEnvironment(py_environment.PyEnvironment):
         if self._episode_ended:
             return ts.termination(self._to_observation(), self._get_reward())
         else:
-            return ts.transition(self._to_observation(), reward = self._get_reward(), discount = 100)
+            return ts.transition(self._to_observation(), reward = self._get_reward(), discount = np.asarray(100, dtype=np.float32))
 
     def _to_observation(self):
         pod = self._get_pod()
 
         # All values here are in the game frame of reference. We do the rotation at the end.
         vel_length = pod.vel.length()
-        vel_angle = math.acos(pod.vel.x / vel_length)
+        vel_angle = math.acos(pod.vel.x / vel_length) if vel_length > EPSILON else 0.0
 
         check1 = self._world.checkpoints[pod.nextCheckId]
         pod_to_check1 = check1 - pod.pos
@@ -142,16 +152,16 @@ class PodEnvironment(py_environment.PyEnvironment):
 
         # Re-orient so pod is at (0,0) angle 0.0
         return {
-            'angles': [
-                vel_angle - pod.angle,
-                ang_to_check1 - pod.angle,
-                ang_check1_to_check2 - ang_to_check1 - pod.angle
-            ],
-            'distances': [
+            'angles': np.array([
+                clean_angle(vel_angle - pod.angle),
+                clean_angle(ang_to_check1 - pod.angle),
+                clean_angle(ang_check1_to_check2 - ang_to_check1 - pod.angle)
+            ]),
+            'distances': np.array([
                 vel_length,
                 dist_to_check1,
                 dist_check1_to_check2,
-            ]
+            ])
         }
 
     def _get_reward(self) -> int:
@@ -159,4 +169,4 @@ class PodEnvironment(py_environment.PyEnvironment):
         reward = Constants.world_x() * Constants.world_y()
         reward += pod.nextCheckId * 10000
         reward -= (self._world.checkpoints[pod.nextCheckId] -  pod.pos).square_length()
-        return reward
+        return np.asarray(reward, dtype=np.float32)
