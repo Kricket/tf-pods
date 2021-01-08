@@ -1,7 +1,7 @@
 import math
 
 import numpy as np
-from typing import Any
+from typing import Any, Tuple
 
 from pod.board import PodBoard
 from pod.constants import Constants
@@ -17,21 +17,45 @@ from vec2 import ORIGIN, EPSILON
 import tensorflow as tf
 tf.compat.v1.enable_v2_behavior()
 
+THRUST_VALUES = 11
+ANGLE_VALUES = 51
+MAX_ACTION = THRUST_VALUES * ANGLE_VALUES - 1
+
+THRUST_INC = Constants.max_thrust() / (THRUST_VALUES - 1)
+ANGLE_INC = Constants.max_turn() * 2 / (ANGLE_VALUES - 1)
+
+def play_to_action(thrust: int, angle: float) -> int:
+    """
+    Given a legal play (angle/thrust), find the nearest discrete action
+    """
+    thrust_pct = thrust / Constants.max_thrust()
+    angle_pct = (angle + Constants.max_turn()) / (2 * Constants.max_turn())
+    thrust_idx = math.floor(thrust_pct * (THRUST_VALUES - 1))
+    angle_idx = math.floor(angle_pct * (ANGLE_VALUES - 1))
+    return math.floor(thrust_idx * ANGLE_VALUES + angle_idx)
+
+def action_to_play(action: int) -> Tuple[int, float]:
+    # An integer in [0, THRUST_VALUES - 1]
+    thrust_idx = int(action / ANGLE_VALUES)
+    # An integer in [0, ANGLE_VALUES - 1]
+    angle_idx = action % ANGLE_VALUES
+    return thrust_idx * THRUST_INC, angle_idx * ANGLE_INC - Constants.max_turn()
+
 
 class QPodController(Controller):
     def __init__(self):
         self.play_output = PlayOutput()
-        self.play_output.thrust = 100
 
     def set_play(self, action, pod: PodState):
         """
         Convert the action to a PlayInput
         """
-        # The action is in (0, 1) --> scale it to an angle (with some extra on the edges)
-        action_angle = (action.item() - 0.5) * (Constants.max_turn() * 1.1)
-        angle = action_angle + pod.angle
-        rel_dir = ORIGIN.rotate(angle) * 1000
-        self.play_output.target = pod.pos + rel_dir
+        (thrust, rel_angle) = action_to_play(action.item())
+        self.play_output.thrust = thrust
+
+        real_angle = rel_angle + pod.angle
+        real_dir = ORIGIN.rotate(real_angle) * 1000
+        self.play_output.target = pod.pos + real_dir
 
     def play(self, pi: PlayInput) -> PlayOutput:
         return self.play_output
@@ -40,12 +64,16 @@ class QPodController(Controller):
 class QPodEnvironment(PyEnvironment):
     def __init__(self, board: PodBoard):
         super().__init__()
+
+        # The action is a single integer representing an index into a list of discrete possible (action, thrust) values
         self._action_spec = array_spec.BoundedArraySpec(
             (),
-            np.float,
-            minimum=0.,
-            maximum=1.)
+            np.int32,
+            minimum=0,
+            maximum=MAX_ACTION)
 
+        # The observation encodes the pod's state and next two checkpoints, seen from the pod's cockpit
+        # (So we can omit the pod's position because it's always (0,0))
         self._observation_spec = array_spec.ArraySpec(shape=(6,), dtype=np.float)
 
         self._time_step_spec = ts.TimeStep(
@@ -57,7 +85,6 @@ class QPodEnvironment(PyEnvironment):
 
         self._board = board
         self._player = Player(QPodController())
-        self._controller = QPodController()
         self._initial_state = self.get_state()
         self._episode_ended = False
 
@@ -90,13 +117,13 @@ class QPodEnvironment(PyEnvironment):
             # a new episode.
             return self.reset()
 
-        if self._player.pod.nextCheckId > 1 or self._world.turns > 100:
+        if self._player.pod.nextCheckId > 1 or self._pod.turns > 100:
             # That's enough for training...
             self._episode_ended = True
         else:
             # Play the given action
-            self._controller.set_play(action, self._player.pod)
-            self._world.step()
+            self._player.controller.set_play(action, self._player.pod)
+            self._player.step(self._board)
 
         if self._episode_ended:
             return ts.termination(self._to_observation(), self._get_reward())
