@@ -16,7 +16,7 @@ class Vec2(object):
         return self._y
 
     def __str__(self):
-        return "(" + str(self.x) + ", " + str(self.y) + ")"
+        return "(%.3f, %.3f)" % (self.x, self.y)
 
     def __mul__(self, other):
         if isinstance(other, (int, float)):
