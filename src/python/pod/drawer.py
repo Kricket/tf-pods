@@ -43,11 +43,11 @@ class Drawer:
         angle_deg = math.degrees(pod.angle) + 180.0
         offset = Vec2(Constants.pod_radius() / 2, 0).rotate(math.radians(angle_deg))
         center = pod.pos - offset
-        return angle_deg - 20, angle_deg + 20, center
+        return angle_deg - 20, angle_deg + 20, center, pod.nextCheckId
 
     def __draw_pod(self, pod: PodState, color: Tuple[float, float, float]) -> Wedge:
         # Draw the wedge
-        theta1, theta2, center = self.__pod_wedge_info(pod)
+        theta1, theta2, center, check_id = self.__pod_wedge_info(pod)
         wedge = Wedge((center.x, center.y), Constants.pod_radius(), theta1, theta2, color = color)
         wedge.set_zorder(10)
         return wedge
@@ -77,8 +77,8 @@ class Drawer:
     def animate(self, filename, max_frames: int = 999999):
         self.__prepare()
 
+        checks = []
         def draw_checks():
-            checks = []
             for (idx, check) in enumerate(self.board.checkpoints):
                 circle = self.__draw_check(check, idx)
                 self.ax.add_artist(circle)
@@ -86,17 +86,17 @@ class Drawer:
             return checks
 
         artists = list(self.__draw_pod(p.pod, gen_color(idx)) for (idx, p) in enumerate(self.players))
-#        artists = list(map(lambda p: self.__draw_pod(p.pod), self.players))
         for a in artists: self.ax.add_artist(a)
         frames = self.__get_frames(max_frames)
 
         def do_animate(framedata):
             for (idx, frame) in framedata:
-                theta1, theta2, center = frame
+                theta1, theta2, center, check_id = frame
                 artists[idx].set_center((center.x, center.y))
                 artists[idx].set_theta1(theta1)
                 artists[idx].set_theta2(theta2)
                 artists[idx]._recompute_path()
+                checks[check_id].set_color((1, 0, 0))
             return artists
 
         anim = FuncAnimation(plt.gcf(), do_animate, init_func = draw_checks, interval = 300, frames = frames, blit = True)

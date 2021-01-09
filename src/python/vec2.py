@@ -22,7 +22,8 @@ class Vec2(object):
         if isinstance(other, (int, float)):
             return Vec2(self.x * other, self.y * other)
         elif isinstance(other, Vec2):
-            return Vec2(self.x * other.x, self.y * other.y)
+            # Dot product
+            return self.x * other.x + self.y * other.y
         else:
             raise TypeError("Invalid multiplicative operand: " + type(other))
 
