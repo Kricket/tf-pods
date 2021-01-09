@@ -64,9 +64,9 @@ class Drawer:
 
         plt.show()
 
-    def __get_frames(self):
+    def __get_frames(self, max_frames: int):
         frames = []
-        while max(p.pod.laps for p in self.players) < 2:
+        while max(p.pod.laps for p in self.players) < 2 and len(frames) < max_frames:
             for p in self.players:
                 p.step(self.board)
             states = map(lambda pl: self.__pod_wedge_info(pl.pod), self.players)
@@ -74,7 +74,7 @@ class Drawer:
         return frames
 
 
-    def animate(self, filename):
+    def animate(self, filename, max_frames: int = 999999):
         self.__prepare()
 
         def draw_checks():
@@ -88,7 +88,7 @@ class Drawer:
         artists = list(self.__draw_pod(p.pod, gen_color(idx)) for (idx, p) in enumerate(self.players))
 #        artists = list(map(lambda p: self.__draw_pod(p.pod), self.players))
         for a in artists: self.ax.add_artist(a)
-        frames = self.__get_frames()
+        frames = self.__get_frames(max_frames)
 
         def do_animate(framedata):
             for (idx, frame) in framedata:

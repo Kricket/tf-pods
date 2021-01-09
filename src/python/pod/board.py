@@ -7,7 +7,7 @@ from vec2 import Vec2
 
 class PodBoard:
     def __init__(self, checks: List[Vec2] = None):
-        if checks == None:
+        if checks is None:
             self.__generate_checks()
         else:
             self.checkpoints = checks.copy()
@@ -28,3 +28,6 @@ class PodBoard:
                 False)
             if not too_close:
                 self.checkpoints.append(check)
+
+    def get_check(self, check_id: int):
+        return self.checkpoints[check_id % len(self.checkpoints)]

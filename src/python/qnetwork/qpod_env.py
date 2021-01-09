@@ -1,7 +1,7 @@
 import math
 
 import numpy as np
-from typing import Any, Tuple
+from typing import Any, Tuple, List
 
 from pod.board import PodBoard
 from pod.constants import Constants
@@ -12,7 +12,7 @@ from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
 
-from vec2 import ORIGIN, EPSILON
+from vec2 import ORIGIN, EPSILON, Vec2
 
 import tensorflow as tf
 tf.compat.v1.enable_v2_behavior()
@@ -34,12 +34,31 @@ def play_to_action(thrust: int, angle: float) -> int:
     angle_idx = math.floor(angle_pct * (ANGLE_VALUES - 1))
     return math.floor(thrust_idx * ANGLE_VALUES + angle_idx)
 
+
 def action_to_play(action: int) -> Tuple[int, float]:
+    """
+    Convert an action (in [0, THRUST_VALUES * ANGLE_VALUES - 1]) into the thrust, angle to play
+    """
+    print(action)
     # An integer in [0, THRUST_VALUES - 1]
     thrust_idx = int(action / ANGLE_VALUES)
     # An integer in [0, ANGLE_VALUES - 1]
     angle_idx = action % ANGLE_VALUES
     return thrust_idx * THRUST_INC, angle_idx * ANGLE_INC - Constants.max_turn()
+
+
+def action_to_output(action: int, pod_angle: float, pod_pos: Vec2, po: PlayOutput = PlayOutput()) -> PlayOutput:
+    """
+    Convert an integer action to a PlayOutput for the given pod state
+    """
+    (thrust, rel_angle) = action_to_play(action)
+    po.thrust = thrust
+
+    real_angle = rel_angle + pod_angle
+    real_dir = ORIGIN.rotate(real_angle) * 1000
+    po.target = pod_pos + real_dir
+
+    return po
 
 
 class QPodController(Controller):
@@ -48,18 +67,46 @@ class QPodController(Controller):
 
     def set_play(self, action, pod: PodState):
         """
-        Convert the action to a PlayInput
+        Convert the action to a PlayOutput
         """
-        (thrust, rel_angle) = action_to_play(action.item())
-        self.play_output.thrust = thrust
-
-        real_angle = rel_angle + pod.angle
-        real_dir = ORIGIN.rotate(real_angle) * 1000
-        self.play_output.target = pod.pos + real_dir
+        action_to_output(action.item(), pod.angle, pod.pos, self.play_output)
 
     def play(self, pi: PlayInput) -> PlayOutput:
         return self.play_output
 
+
+def reward(pod: PodState, board: PodBoard) -> int:
+    """
+    Calculate the reward value for the given pod on the given board
+    """
+    r = Constants.world_x() * Constants.world_y()
+    r += pod.nextCheckId * 10000
+    r -= (board.checkpoints[pod.nextCheckId] - pod.pos).square_length()
+    return r
+
+
+def state_to_vector(pod_pos: Vec2, pod_vel: Vec2, pod_angle: float, target_check: Vec2, next_check: Vec2) -> List[float]:
+    # All values here are in the game frame of reference. We do the rotation at the end.
+    vel_length = pod_vel.length()
+    vel_angle = math.acos(pod_vel.x / vel_length) if vel_length > EPSILON else 0.0
+
+    pod_to_check1 = target_check - pod_pos
+    dist_to_check1 = pod_to_check1.length()
+    ang_to_check1 = math.acos(pod_to_check1.x / dist_to_check1)
+
+    check1_to_check2 = next_check - target_check
+    dist_check1_to_check2 = check1_to_check2.length()
+    ang_check1_to_check2 = math.acos(check1_to_check2.x / dist_check1_to_check2)
+
+    # Re-orient so pod is at (0,0) angle 0.0
+    return [
+        clean_angle(vel_angle - pod_angle),
+        clean_angle(ang_to_check1 - pod_angle),
+        clean_angle(ang_check1_to_check2 - ang_to_check1 - pod_angle),
+        vel_length,
+        dist_to_check1,
+        dist_check1_to_check2
+    ]
 
 class QPodEnvironment(PyEnvironment):
     def __init__(self, board: PodBoard):
@@ -131,32 +178,13 @@ class QPodEnvironment(PyEnvironment):
             return ts.transition(self._to_observation(), reward = self._get_reward(), discount = np.asarray(100, dtype=np.float32))
 
     def _to_observation(self):
-        # All values here are in the game frame of reference. We do the rotation at the end.
-        vel_length = self._player.pod.vel.length()
-        vel_angle = math.acos(self._player.pod.vel.x / vel_length) if vel_length > EPSILON else 0.0
-
-        check1 = self._world.checkpoints[self._player.pod.nextCheckId]
-        pod_to_check1 = check1 - self._player.pod.pos
-        dist_to_check1 = pod_to_check1.length()
-        ang_to_check1 = math.acos(pod_to_check1.x / dist_to_check1)
-
-        check2 = self._world.checkpoints[(self._player.pod.nextCheckId + 1) % len(self._world.checkpoints)]
-        check1_to_check2 = check2 - check1
-        dist_check1_to_check2 = check1_to_check2.length()
-        ang_check1_to_check2 = math.acos(check1_to_check2.x / dist_check1_to_check2)
-
-        # Re-orient so pod is at (0,0) angle 0.0
-        return np.array([
-            clean_angle(vel_angle - self._player.pod.angle),
-            clean_angle(ang_to_check1 - self._player.pod.angle),
-            clean_angle(ang_check1_to_check2 - ang_to_check1 - self._player.pod.angle),
-            vel_length,
-            dist_to_check1,
-            dist_check1_to_check2
-        ])
+        return state_to_vector(
+            self._player.pod.pos,
+            self._player.pod.vel,
+            self._player.pod.angle,
+            self._board.get_check(self._player.pod.nextCheckId),
+            self._board.get_check(self._player.pod.nextCheckId + 1)
+        )
 
     def _get_reward(self) -> int:
-        reward = Constants.world_x() * Constants.world_y()
-        reward += self._player.pod.nextCheckId * 10000
-        reward -= (self._board.checkpoints[self._player.pod.nextCheckId] -  self._player.pod.pos).square_length()
-        return np.asarray(reward, dtype=np.float32)
+        return np.asarray(reward(self._player.pod, self._board), dtype=np.float32)
