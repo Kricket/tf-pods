@@ -30,7 +30,7 @@ class Controller:
     Base class for a Controller: a thing that produces a play for a given input
     """
     def play(self, pi: PlayInput) -> PlayOutput:
-        raise TypeError("Abstract base class")
+        return PlayOutput()
 
 
 class SimpleController(Controller):

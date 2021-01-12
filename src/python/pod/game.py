@@ -50,7 +50,7 @@ def game_step(board: PodBoard, pod: PodState, play: PlayOutput, output: PodState
     :param board: The board on which the game is being played
     :param pod: PodInfo starting state
     :param play: PlayInput to play
-    :param output: PodInfo output state to update.
+    :param output: PodInfo output state to update (may be the same as input pod).
     :return: The new pod state
     """
     # 1. Rotation

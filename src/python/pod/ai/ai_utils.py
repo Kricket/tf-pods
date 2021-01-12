@@ -60,10 +60,17 @@ def reward(pod: PodState, board: PodBoard) -> int:
     """
     Calculate the reward value for the given pod on the given board
     """
-    r = Constants.world_x() * Constants.world_y()
-    r += pod.nextCheckId * 10000
-    r -= (board.checkpoints[pod.nextCheckId] - pod.pos).square_length()
-    return r
+    # Rough estimate of the maximum distance (squared) between a pod and a checkpoint
+    max_dist_sq = Constants.world_x() * Constants.world_y()
+    # Distance (squared) to next checkpoint
+    dist_to_check_sq = (board.checkpoints[pod.nextCheckId] - pod.pos).square_length()
+
+    # The reward is:
+    # 1 - (fraction of dist to next check)
+    # + an extra point for each checkpoint
+    return (max_dist_sq - dist_to_check_sq) / max_dist_sq\
+           + pod.nextCheckId\
+           + (pod.laps * len(board.checkpoints))
 
 
 def state_to_vector(
