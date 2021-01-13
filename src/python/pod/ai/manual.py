@@ -73,7 +73,7 @@ class DQController(Controller):
 
         numpy_q = q_values.numpy()
         numpy_q[0][best_q_idx] = reward(next_state, self.board) + discount * best_next_q
-        return numpy_q
+        return numpy_q, best_q_idx
 
     def __get_target_highest_reward_values(self, pod: PodState):
         """
@@ -136,8 +136,23 @@ class DQController(Controller):
             batch_qs = np.array(list(
                 self.__get_target_highest_reward_values(pod) \
                     if use_best else
-                    self.__get_target_q_values(pod, discount, epsilon)
+                    self.__get_target_q_values(pod, discount, epsilon)[0]
                 for pod in pods[start:start + batch_size]))
             loss = self.model.train_on_batch(batch_states, batch_qs)
             print("Training on batch {} - {}: loss = {}".format(start, start + batch_size, loss))
             start += batch_size
+
+    def train_online(self, iterations: int, discount: float = 0.1, epsilon: float = 0):
+        pod = PodState()
+        for i in range(0, iterations):
+            state = state_to_vector(
+                pod.pos,
+                pod.vel,
+                pod.angle,
+                self.board.get_check(pod.nextCheckId),
+                self.board.get_check(pod.nextCheckId + 1))
+            target, action = self.__get_target_q_values(pod, discount, epsilon)
+            loss = self.model.train_on_batch(np.array([state]), np.array([target]))
+            game_step(self.board, pod, action_to_output(action, pod.angle, pod.pos), pod)
+            if i % 50 == 0:
+                print("Iteration {} loss {}".format(i, loss))
