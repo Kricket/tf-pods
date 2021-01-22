@@ -77,7 +77,7 @@ class DQController(Controller):
 
     def __get_target_highest_reward_values(self, pod: PodState):
         """
-        Get an output array with all zeroes, but 1 in the place of the action with the highest reward
+        Get an output array with the reward of each action for the given initial state
         """
         rewards = []
         for action in range(0, THRUST_VALUES * ANGLE_VALUES):

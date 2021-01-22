@@ -6,14 +6,14 @@ from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import PlayOutput
 from pod.util import PodState, clean_angle
-from vec2 import Vec2, ORIGIN, EPSILON, UNIT
+from vec2 import Vec2, EPSILON, UNIT
 
 MAX_VEL = 558
 # Distance to use for scaling inputs
 MAX_DIST = Vec2(Constants.world_x(), Constants.world_y()).length()
 
-THRUST_VALUES = 11
-ANGLE_VALUES = 51
+THRUST_VALUES = 3
+ANGLE_VALUES = 6
 MAX_ACTION = THRUST_VALUES * ANGLE_VALUES - 1
 
 THRUST_INC = Constants.max_thrust() / (THRUST_VALUES - 1)
@@ -60,20 +60,18 @@ def reward(pod: PodState, board: PodBoard) -> int:
     """
     Calculate the reward value for the given pod on the given board
     """
-    # Rough estimate of the maximum distance (squared) between a pod and a checkpoint
-    max_dist_sq = Constants.world_x() * Constants.world_y()
-    # Distance (squared) to next checkpoint
-    dist_to_check_sq = (board.checkpoints[pod.nextCheckId] - pod.pos).square_length()
+    # Reward for distance to next check - in [0, 1]
+    dist_sq_to_check = (board.checkpoints[pod.nextCheckId] - pod.pos).square_length()
+    world_approx = Constants.world_x() * Constants.world_y()
+    dist_reward = max((world_approx - dist_sq_to_check) / world_approx, 0)
 
-    # The reward is:
-    # 1 - (fraction of dist to next check)
-    # + an extra point for each checkpoint
-    return (max_dist_sq - dist_to_check_sq) / max_dist_sq\
-           + pod.nextCheckId\
-           + (pod.laps * len(board.checkpoints))
+    # Bonus: 1 for each checkpoint already hit
+    check_bonus = pod.nextCheckId + (pod.laps * len(board.checkpoints))
+
+    return check_bonus + 2 * dist_reward
 
 
-def state_to_vector(
+def state_to_vector_old(
         pod_pos: Vec2,
         pod_vel: Vec2,
         pod_angle: float,
@@ -112,3 +110,17 @@ def state_to_vector(
         # Scaled distance between next 2 checks
         dist_check1_to_check2 / MAX_DIST
     ]
+
+def state_to_vector(
+        pod_pos: Vec2,
+        pod_vel: Vec2,
+        pod_angle: float,
+        target_check: Vec2,
+        next_check: Vec2
+) -> List[float]:
+    # Velocity is already relative to the pod, so it just needs to be rotated
+    vel = pod_vel.rotate(-pod_angle)
+    check1 = (target_check - pod_pos).rotate(-pod_angle)
+    check2 = (next_check - pod_pos).rotate(-pod_angle)
+
+    return [vel.x, vel.y, check1.x, check1.y, check2.x, check2.y]

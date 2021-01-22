@@ -92,7 +92,7 @@ class AIUtilsTest(TestCase):
         self.assertAlmostEqual(rel_target.y, 0)
         self.assertGreater(rel_target.x, 1)
 
-    def test_state_to_vector_works(self):
+    def oldtest_state_to_vector_works1(self):
         state = state_to_vector(
             Vec2(100, 100), # position
             Vec2(0, MAX_VEL), # velocity: straight up
@@ -104,6 +104,54 @@ class AIUtilsTest(TestCase):
         self.assertAlmostEqual(state[0], -0.5 * math.pi, msg="angle from pod to velocity")
         self.assertAlmostEqual(state[1], math.pi, msg="angle from pod heading to target check")
         self.assertAlmostEqual(state[2], 0.5 * math.pi, msg="angle from (pod to check1) to (check1 to check2)")
-        self.assertAlmostEqual(state[3], 1, msg="scaled velocity")
+        self.assertAlmostEqual(state[3], 1, msg="scaled velocity magnitude")
         self.assertAlmostEqual(state[4], 1, msg="scaled distance to check1")
         self.assertAlmostEqual(state[5], 1, msg="scaled distance check1 to check2")
+
+    def oldtest_state_to_vector_works2(self):
+        state = state_to_vector(
+            Vec2(-100, -100), # position
+            Vec2(-3, -3), # velocity: 45 degrees down-left
+            math.pi / 2, # angle: pointing up Y
+            Vec2(-100, 1000), # target check: in front of Pod
+            Vec2(-100, 3000) # next check: in same direction
+        )
+
+        self.assertAlmostEqual(state[0], 0.75 * math.pi, msg="angle from pod to velocity")
+        self.assertAlmostEqual(state[1], 0, msg="angle from pod heading to target check")
+        self.assertAlmostEqual(state[2], 0, msg="angle from (pod to check1) to (check1 to check2)")
+        self.assertAlmostEqual(state[3], 18 / MAX_VEL, msg="scaled velocity magnitude")
+        self.assertAlmostEqual(state[4], 1100 / MAX_DIST, msg="scaled distance to check1")
+        self.assertAlmostEqual(state[5], 2000 / MAX_DIST, msg="scaled distance check1 to check2")
+
+    def test_state_to_vector_works1(self):
+        state = state_to_vector(
+            Vec2(100, 100), # position
+            Vec2(0, MAX_VEL), # velocity: straight up
+            -math.pi, # angle: pointing down -X
+            Vec2(100 + MAX_DIST, 100), # target check: behind the pod in X direction
+            Vec2(100 + MAX_DIST, 100 + MAX_DIST) # next check: right turn from target check
+        )
+
+        self.assertAlmostEqual(state[0], 0, msg="velocity x")
+        self.assertAlmostEqual(state[1], -MAX_VEL, msg="velocity y")
+        self.assertAlmostEqual(state[2], -MAX_DIST, msg="check1 x")
+        self.assertAlmostEqual(state[3], 0, msg="check1 y")
+        self.assertAlmostEqual(state[4], -MAX_DIST, msg="check2 x")
+        self.assertAlmostEqual(state[5], -MAX_DIST, msg="check2 y")
+
+    def test_state_to_vector_works2(self):
+        state = state_to_vector(
+            Vec2(-100, -100), # position
+            Vec2(-3, -3), # velocity: 45 degrees down-left
+            math.pi / 2, # angle: pointing up Y
+            Vec2(-100, 1000), # target check: in front of Pod
+            Vec2(-100, 3000) # next check: in same direction
+        )
+
+        self.assertAlmostEqual(state[0], -3, msg="velocity x")
+        self.assertAlmostEqual(state[1], 3, msg="velocity y")
+        self.assertAlmostEqual(state[2], 1100, msg="check1 x")
+        self.assertAlmostEqual(state[3], 0, msg="check1 y")
+        self.assertAlmostEqual(state[4], 3100, msg="check2 x")
+        self.assertAlmostEqual(state[5], 0, msg="check2 y")
