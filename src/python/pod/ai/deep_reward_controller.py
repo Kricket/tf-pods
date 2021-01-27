@@ -35,7 +35,7 @@ class DeepRewardController(Controller):
             self.model = model
 
         self.model.compile(
-            optimizer=tf.optimizers.Adam(learning_rate=0.0005),
+            optimizer=tf.optimizers.Adam(learning_rate=0.0003),
             metrics=['accuracy'],
             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
         )
@@ -79,7 +79,7 @@ class DeepRewardController(Controller):
                 self.board.get_check(p.nextCheckId + 1)
             ) for p in pods))
         labels = np.array(list(get_best_action(self.board, pod) for pod in pods))
-        self.model.fit(states, labels, epochs=epochs)
+        return self.model.fit(states, labels, epochs=epochs)
 
     def train_online(self, turns: int = 200):
         states = []

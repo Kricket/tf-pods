@@ -33,6 +33,15 @@ class Player:
         pi = PlayInput(self.pod, board)
         game_step(board, self.pod, self.controller.play(pi), self.pod)
 
+    def reset(self, board: PodBoard):
+        """
+        Reset: put the pod at the start position with 0 turns/laps
+        """
+        self.pod.turns = 0
+        self.pod.laps = 0
+        self.pod.nextCheckId = 0
+        self.pod.pos = board.checkpoints[-1]
+
 
 def game_step(board: PodBoard, pod: PodState, play: PlayOutput, output: PodState):
     """

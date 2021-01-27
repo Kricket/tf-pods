@@ -75,13 +75,12 @@ def reward(pod: PodState, board: PodBoard) -> int:
     dist_penalty = dist_to_check / MAX_DIST
 
     # Bonus: points for each checkpoint already hit
-    checks_hit = pod.nextCheckId + (pod.laps * len(board.checkpoints))
-    check_bonus = 5  * checks_hit
+    check_bonus = pod.nextCheckId + (pod.laps * len(board.checkpoints))
 
     # Bonus: a tiny amount if the pod is pointing at the next check (helps to distinguish between
     # states with 0 thrust)
     ang_diff = clean_angle(pod_to_check.angle() - pod.angle)
-    ang_bonus = (math.pi - math.fabs(ang_diff)) / math.pi
+    ang_bonus = 0.1 * (math.pi - math.fabs(ang_diff)) / math.pi
 
     return ang_bonus + check_bonus - dist_penalty + 1
 

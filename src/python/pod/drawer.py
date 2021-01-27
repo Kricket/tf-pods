@@ -6,9 +6,10 @@ import math
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.patches import Circle, Wedge
 
+from pod.ai.ai_utils import reward
 from pod.constants import Constants
 from pod.board import PodBoard
-from pod.game import Player
+from pod.game import Player, game_step
 from pod.util import PodState
 from vec2 import Vec2
 
@@ -55,6 +56,9 @@ class Drawer:
         return wedge
 
     def draw(self):
+        """
+        Draw a single frame of the game in its current state (board, players)
+        """
         self.__prepare()
 
         for (idx, check) in enumerate(self.board.checkpoints):
@@ -66,9 +70,9 @@ class Drawer:
 
         plt.show()
 
-    def __get_frames(self, max_frames: int):
+    def __get_frames(self, max_frames: int, max_laps: int):
         frames = []
-        while max(p.pod.laps for p in self.players) < 2 and len(frames) < max_frames:
+        while max(p.pod.laps for p in self.players) < max_laps and len(frames) < max_frames:
             for p in self.players:
                 p.step(self.board)
             states = map(lambda pl: self.__pod_wedge_info(pl.pod), self.players)
@@ -76,7 +80,13 @@ class Drawer:
         return frames
 
 
-    def animate(self, filename, max_frames: int = 999999):
+    def animate(self, filename, max_frames: int = 200, max_laps: int = 3):
+        """
+        Generate an animated GIF of the players running through the game
+        :param filename: Where to store the generated file
+        :param max_frames: Max number of turns to play
+        :param max_laps: Max number of laps for any player
+        """
         self.__prepare()
 
         checks = []
@@ -89,7 +99,7 @@ class Drawer:
 
         artists = list(self.__draw_pod(p.pod, gen_color(idx)) for (idx, p) in enumerate(self.players))
         for a in artists: self.ax.add_artist(a)
-        frames = self.__get_frames(max_frames)
+        frames = self.__get_frames(max_frames, max_laps)
 
         def do_animate(framedata):
             for (idx, frame) in framedata:
@@ -102,5 +112,32 @@ class Drawer:
             return artists
 
         anim = FuncAnimation(plt.gcf(), do_animate, init_func = draw_checks, interval = 300, frames = frames, blit = True)
+        plt.legend(artists, [
+            "Player {} ({})".format(p, type(self.players[p].controller).__name__)
+            for p in range(len(self.players))
+        ])
         plt.close(self.fig)
         anim.save(filename, writer = PillowWriter(fps=10))
+
+
+    def chart_rewards(self, max_frames: int = 100):
+        """
+        Display a graph of the rewards for each player at each turn
+        """
+        rewards = [[reward(p.pod, self.board)] for p in self.players]
+        for frame in range(max_frames):
+            for p in range(len(self.players)):
+                self.players[p].step(self.board)
+                rewards[p].append(reward(self.players[p].pod, self.board))
+
+        for (idx, r) in enumerate(rewards):
+            plt.plot(r, color=gen_color(idx))
+
+        plt.legend([
+            "Player {} ({})".format(p, type(self.players[p].controller).__name__)
+            for p in range(len(self.players))
+        ])
+        plt.ylabel('reward')
+        plt.xlabel('player')
+        plt.grid(axis='y')
+        plt.show()
