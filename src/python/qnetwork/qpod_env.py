@@ -3,7 +3,7 @@ from typing import Any
 import tensorflow as tf
 
 import numpy as np
-from pod.ai.ai_utils import action_to_output, MAX_ACTION, state_to_vector, reward
+from pod.ai.ai_utils import action_to_output, state_to_vector, reward, THRUST_VALUES, ANGLE_VALUES
 from pod.board import PodBoard
 from pod.controller import PlayOutput
 from pod.game import game_step
@@ -21,7 +21,7 @@ class QPodEnvironment(PyEnvironment):
 
         # One output for each possible action
         self._action_spec = array_spec.BoundedArraySpec(
-            (MAX_ACTION,),
+            (THRUST_VALUES * ANGLE_VALUES - 1,),
             np.int32,
             minimum=0,
             maximum=10)

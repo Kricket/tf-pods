@@ -12,3 +12,5 @@ Simply run `docker-compose up` from the project directory. Follow the instructio
 open a browser to the Jupyter instance that starts.
 
 Run `pip install -t /pip tf-agents` to install the Tensorflow Agents library.
+
+To run unit tests: from within the container, run `python -m unittest <test file>`

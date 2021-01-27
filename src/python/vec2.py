@@ -44,6 +44,21 @@ class Vec2(object):
     def __sub__(self, other):
         return Vec2(self.x - other.x, self.y - other.y)
 
+    def __truediv__(self, other):
+        if isinstance(other, (int, float)):
+            return Vec2(self.x / other, self.y / other)
+        else:
+            raise TypeError("Invalid additive operand: " + type(other))
+
+    def __eq__(self, other):
+        if not isinstance(other, Vec2):
+            return False
+        if math.fabs(self.x - other.x) > EPSILON:
+            return False
+        if math.fabs(self.y - other.y) > EPSILON:
+            return False
+        return True
+
     def length(self) -> float:
         return math.sqrt(self.square_length())
 

@@ -1,20 +1,25 @@
-# Maximum speed that a pod can attain through normal acceleration (tested empirically)
 import math
-from typing import Tuple, List
+from typing import Tuple, List, Generator
 
+import numpy as np
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import PlayOutput
+from pod.game import game_step
 from pod.util import PodState, clean_angle
-from vec2 import Vec2, EPSILON, UNIT
+from vec2 import Vec2, UNIT
 
+# Length of the state vector (model input)
+STATE_VECTOR_LEN = 6
+
+# Maximum speed that a pod can attain through normal acceleration (tested empirically)
 MAX_VEL = 558
 # Distance to use for scaling inputs
 MAX_DIST = Vec2(Constants.world_x(), Constants.world_y()).length()
 
 THRUST_VALUES = 3
-ANGLE_VALUES = 6
-MAX_ACTION = THRUST_VALUES * ANGLE_VALUES - 1
+ANGLE_VALUES = 3
+NUM_ACTIONS = THRUST_VALUES * ANGLE_VALUES
 
 THRUST_INC = Constants.max_thrust() / (THRUST_VALUES - 1)
 ANGLE_INC = Constants.max_turn() * 2 / (ANGLE_VALUES - 1)
@@ -42,10 +47,13 @@ def action_to_play(action: int) -> Tuple[int, float]:
     return thrust_idx * THRUST_INC, angle_idx * ANGLE_INC - Constants.max_turn()
 
 
-def action_to_output(action: int, pod_angle: float, pod_pos: Vec2, po: PlayOutput = PlayOutput()) -> PlayOutput:
+def action_to_output(action: int, pod_angle: float, pod_pos: Vec2, po: PlayOutput = None) -> PlayOutput:
     """
     Convert an integer action to a PlayOutput for the given pod state
     """
+    if po is None:
+        po = PlayOutput()
+
     (thrust, rel_angle) = action_to_play(action)
     po.thrust = thrust
 
@@ -60,56 +68,23 @@ def reward(pod: PodState, board: PodBoard) -> int:
     """
     Calculate the reward value for the given pod on the given board
     """
+    pod_to_check = board.checkpoints[pod.nextCheckId] - pod.pos
+
     # Reward for distance to next check - in [0, 1]
-    dist_sq_to_check = (board.checkpoints[pod.nextCheckId] - pod.pos).square_length()
-    world_approx = Constants.world_x() * Constants.world_y()
-    dist_reward = max((world_approx - dist_sq_to_check) / world_approx, 0)
+    dist_to_check = pod_to_check.length()
+    dist_penalty = dist_to_check / MAX_DIST
 
-    # Bonus: 1 for each checkpoint already hit
-    check_bonus = pod.nextCheckId + (pod.laps * len(board.checkpoints))
+    # Bonus: points for each checkpoint already hit
+    checks_hit = pod.nextCheckId + (pod.laps * len(board.checkpoints))
+    check_bonus = 5  * checks_hit
 
-    return check_bonus + 2 * dist_reward
+    # Bonus: a tiny amount if the pod is pointing at the next check (helps to distinguish between
+    # states with 0 thrust)
+    ang_diff = clean_angle(pod_to_check.angle() - pod.angle)
+    ang_bonus = (math.pi - math.fabs(ang_diff)) / math.pi
 
+    return ang_bonus + check_bonus - dist_penalty + 1
 
-def state_to_vector_old(
-        pod_pos: Vec2,
-        pod_vel: Vec2,
-        pod_angle: float,
-        target_check: Vec2,
-        next_check: Vec2
-) -> List[float]:
-    """
-    Transform the given pod state information into a simple array that can be fed as input to a NN
-    """
-    # All values here are in the game frame of reference. We do the rotation at the end.
-    vel_length = pod_vel.length()
-    vel_angle = math.acos(pod_vel.x / vel_length) if vel_length > EPSILON else 0.0
-
-    pod_to_check1 = target_check - pod_pos
-    dist_to_check1 = pod_to_check1.length()
-    ang_to_check1 = math.acos(pod_to_check1.x / dist_to_check1)
-
-    check1_to_check2 = next_check - target_check
-    dist_check1_to_check2 = check1_to_check2.length()
-    ang_check1_to_check2 = math.acos(
-        (check1_to_check2 * pod_to_check1) / (dist_check1_to_check2 * dist_to_check1)
-    )
-
-    # Re-orient so pod is at (0,0) angle 0.0
-    return [
-        # Angle between pod and its velocity
-        clean_angle(vel_angle - pod_angle),
-        # Angle between pod orientation and target check
-        clean_angle(ang_to_check1 - pod_angle),
-        # Angle between (pod to target check) and (target check to next check)
-        clean_angle(ang_check1_to_check2 - ang_to_check1 - pod_angle),
-        # Scaled velocity
-        vel_length / MAX_VEL,
-        # Scaled distance to target check
-        dist_to_check1 / MAX_DIST,
-        # Scaled distance between next 2 checks
-        dist_check1_to_check2 / MAX_DIST
-    ]
 
 def state_to_vector(
         pod_pos: Vec2,
@@ -119,8 +94,75 @@ def state_to_vector(
         next_check: Vec2
 ) -> List[float]:
     # Velocity is already relative to the pod, so it just needs to be rotated
-    vel = pod_vel.rotate(-pod_angle)
-    check1 = (target_check - pod_pos).rotate(-pod_angle)
-    check2 = (next_check - pod_pos).rotate(-pod_angle)
+    vel = pod_vel.rotate(-pod_angle) / MAX_VEL
+    check1 = (target_check - pod_pos).rotate(-pod_angle) / MAX_DIST
+    check2 = (next_check - pod_pos).rotate(-pod_angle) / MAX_DIST
 
-    return [vel.x, vel.y, check1.x, check1.y, check2.x, check2.y]
+    res = [vel.x, vel.y, check1.x, check1.y, check2.x, check2.y]
+    return res
+
+
+def frange(mini: float, maxi: float, steps: int):
+    """
+    Generate 'steps' values from mini to maxi (including both endpoints)
+    """
+    if steps <= 1:
+        yield mini
+    else:
+        total = maxi - mini
+        step_size = total / (steps - 1) # So that we include min and max
+        for i in range(steps):
+            yield mini + step_size * i
+
+
+def gen_pods(
+        checkpoint: Vec2,
+        xy_range: Generator[float, None, None],
+        ang_range: Generator[float, None, None],
+        vel_ang_range: Generator[float, None, None],
+        vel_mag_range: Generator[float, None, None]
+):
+    pods = []
+    xy_list = list(xy_range)
+    ang_list = list(ang_range)
+    vel_ang_list = list(vel_ang_range)
+    vel_mag_list = list(vel_mag_range)
+
+    for x in xy_list:
+        for y in xy_list:
+            abs_pos = Vec2(x, y)
+            ang_to_check = abs_pos.angle() + math.pi
+            pos = abs_pos + checkpoint
+            for a in ang_list:
+                angle = clean_angle(ang_to_check + a)
+                for va in vel_ang_list:
+                    vel_dir = UNIT.rotate(ang_to_check + va)
+                    for vm in vel_mag_list:
+                        vel = vel_dir * vm
+
+                        pod = PodState(pos)
+                        pod.angle = angle
+                        pod.vel = vel
+                        pods.append(pod)
+
+    np.random.shuffle(pods)
+    print("{} pods generated".format(len(pods)))
+    return pods
+
+
+def get_best_action(board: PodBoard, pod: PodState) -> int:
+    """
+    Get the action that will result in the highest reward for the given state
+    """
+    best_action = 0
+    best_reward = -999
+
+    for action in range(NUM_ACTIONS):
+        next_state = PodState()
+        game_step(board, pod, action_to_output(action, pod.angle, pod.pos), next_state)
+        r = reward(next_state, board)
+        if r > best_reward:
+            best_reward = r
+            best_action = action
+
+    return best_action

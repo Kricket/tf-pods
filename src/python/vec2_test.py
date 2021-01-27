@@ -1,7 +1,7 @@
 import math
 from unittest import TestCase
 
-from vec2 import Vec2
+from vec2 import Vec2, EPSILON
 
 
 class Vec2Test(TestCase):
@@ -96,3 +96,9 @@ class Vec2Test(TestCase):
     def test_angle_works(self):
         v = Vec2(123, -123)
         self.assertEqual(v.angle(), 1.75 * math.pi)
+
+    def test_eq_works(self):
+        v1 = Vec2(1 + EPSILON*.99, 0)
+        v2 = Vec2(1, -EPSILON*.99)
+
+        self.assertEqual(v1, v2)

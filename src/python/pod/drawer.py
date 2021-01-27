@@ -13,6 +13,8 @@ from pod.util import PodState
 from vec2 import Vec2
 
 
+PADDING = 5000
+
 def gen_color(seed: int) -> Tuple[float, float, float]:
     """
     Generate a color based on the given seed
@@ -30,7 +32,7 @@ class Drawer:
 
     def __prepare(self):
         self.fig = plt.figure()
-        self.ax = plt.axes(xlim=(-50, Constants.world_x() + 50), ylim=(-50, Constants.world_y() + 50))
+        self.ax = plt.axes(xlim=(-PADDING, Constants.world_x() + PADDING), ylim=(-PADDING, Constants.world_y() + PADDING))
         self.ax.invert_yaxis()
         plt.rcParams['figure.figsize'] = [Constants.world_x() / 1000, Constants.world_y() / 1000]
         plt.rcParams['figure.dpi'] = 100

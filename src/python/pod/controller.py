@@ -14,6 +14,19 @@ class PlayInput:
         self.nextCheckId = pod.nextCheckId
         self.nextCheck = board.checkpoints[pod.nextCheckId]
 
+    def as_pod(self) -> PodState:
+        """
+        Get this as a PodState (some data may be missing...)
+        """
+        pod = PodState(self.pos)
+        pod.vel = self.vel
+        pod.angle = self.angle
+        pod.nextCheckId = self.nextCheckId
+        return pod
+
+    def __str__(self):
+        return "PI[pos={} vel={} angle={} nextId={}]".format(self.pos, self.vel, self.angle, self.nextCheckId)
+
 
 class PlayOutput:
     """
@@ -23,6 +36,9 @@ class PlayOutput:
         # Point towards which we want to move
         self.target = target
         self.thrust = thrust
+
+    def __str__(self):
+        return "thrust {} target {}".format(self.thrust, self.target)
 
 
 class Controller:
