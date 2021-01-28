@@ -37,10 +37,12 @@ class Player:
         """
         Reset: put the pod at the start position with 0 turns/laps
         """
-        self.pod.turns = 0
-        self.pod.laps = 0
-        self.pod.nextCheckId = 0
         self.pod.pos = board.checkpoints[-1]
+        self.pod.vel = ORIGIN
+        self.pod.angle = 0
+        self.pod.nextCheckId = 0
+        self.pod.laps = 0
+        self.pod.turns = 0
 
 
 def game_step(board: PodBoard, pod: PodState, play: PlayOutput, output: PodState):

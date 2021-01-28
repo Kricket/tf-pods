@@ -4,26 +4,28 @@ import matplotlib.pyplot as plt
 import math
 
 from matplotlib.animation import FuncAnimation, PillowWriter
-from matplotlib.patches import Circle, Wedge
+from matplotlib.patches import Circle, Wedge, Rectangle
 
 from pod.ai.ai_utils import reward
 from pod.constants import Constants
 from pod.board import PodBoard
-from pod.game import Player, game_step
+from pod.game import Player
 from pod.util import PodState
 from vec2 import Vec2
 
 
-PADDING = 5000
+# extra space around the edge of the actual game area to show
+PADDING = 3000
+
 
 def gen_color(seed: int) -> Tuple[float, float, float]:
     """
     Generate a color based on the given seed
-    :param seed: A small integer (i.e. the number of the pod
+    :param seed: A small integer (i.e. the index of the pod)
     :return:
     """
-    color = (seed * 12345 % 6789) / 6789.0
-    return color, 1 - color, 0.0
+    color = ((seed * 167) % 13) / 13
+    return color, 1 - color, seed % 2
 
 
 class Drawer:
@@ -32,11 +34,11 @@ class Drawer:
         self.players = players
 
     def __prepare(self):
+        plt.rcParams['figure.figsize'] = [Constants.world_x() / 1000, Constants.world_y() / 1000]
+        plt.rcParams['figure.dpi'] = 100
         self.fig = plt.figure()
         self.ax = plt.axes(xlim=(-PADDING, Constants.world_x() + PADDING), ylim=(-PADDING, Constants.world_y() + PADDING))
         self.ax.invert_yaxis()
-        plt.rcParams['figure.figsize'] = [Constants.world_x() / 1000, Constants.world_y() / 1000]
-        plt.rcParams['figure.dpi'] = 100
 
     def __draw_check(self, check: Vec2, idx: int) -> Circle:
         self.ax.annotate(str(idx), xy=(check.x, check.y), fontsize=20, ha="center")
@@ -48,12 +50,18 @@ class Drawer:
         center = pod.pos - offset
         return angle_deg - 20, angle_deg + 20, center, pod.nextCheckId
 
-    def __draw_pod(self, pod: PodState, color: Tuple[float, float, float]) -> Wedge:
+    def __get_pod_artist(self, pod: PodState, color: Tuple[float, float, float]) -> Wedge:
         # Draw the wedge
         theta1, theta2, center, check_id = self.__pod_wedge_info(pod)
         wedge = Wedge((center.x, center.y), Constants.pod_radius(), theta1, theta2, color = color)
         wedge.set_zorder(10)
         return wedge
+
+    def __get_field_artist(self) -> Rectangle:
+        return Rectangle(
+            (0, 0),
+            Constants.world_x(), Constants.world_y(),
+            ec="black", fc="white")
 
     def draw(self):
         """
@@ -61,12 +69,14 @@ class Drawer:
         """
         self.__prepare()
 
+        self.ax.add_artist(self.__get_field_artist())
+
         for (idx, check) in enumerate(self.board.checkpoints):
             circle = self.__draw_check(check, idx)
             self.ax.add_artist(circle)
 
         for (idx, player) in enumerate(self.players):
-            self.ax.add_artist(self.__draw_pod(player.pod, gen_color(idx)))
+            self.ax.add_artist(self.__get_pod_artist(player.pod, gen_color(idx)))
 
         plt.show()
 
@@ -80,7 +90,7 @@ class Drawer:
         return frames
 
 
-    def animate(self, filename, max_frames: int = 200, max_laps: int = 3):
+    def animate(self, filename, max_frames: int = 200, max_laps: int = 5):
         """
         Generate an animated GIF of the players running through the game
         :param filename: Where to store the generated file
@@ -89,30 +99,33 @@ class Drawer:
         """
         self.__prepare()
 
-        checks = []
-        def draw_checks():
+        back_artists = []
+        def draw_background():
+            back_artists.append(self.__get_field_artist())
             for (idx, check) in enumerate(self.board.checkpoints):
-                circle = self.__draw_check(check, idx)
-                self.ax.add_artist(circle)
-                checks.append(circle)
-            return checks
+                back_artists.append(self.__draw_check(check, idx))
 
-        artists = list(self.__draw_pod(p.pod, gen_color(idx)) for (idx, p) in enumerate(self.players))
-        for a in artists: self.ax.add_artist(a)
+            for artist in back_artists:
+                self.ax.add_artist(artist)
+
+            return back_artists
+
+        pod_artists = list(self.__get_pod_artist(p.pod, gen_color(idx)) for (idx, p) in enumerate(self.players))
+        for a in pod_artists: self.ax.add_artist(a)
         frames = self.__get_frames(max_frames, max_laps)
 
         def do_animate(framedata):
             for (idx, frame) in framedata:
                 theta1, theta2, center, check_id = frame
-                artists[idx].set_center((center.x, center.y))
-                artists[idx].set_theta1(theta1)
-                artists[idx].set_theta2(theta2)
-                artists[idx]._recompute_path()
-                checks[check_id].set_color((1, 0, 0))
-            return artists
+                pod_artists[idx].set_center((center.x, center.y))
+                pod_artists[idx].set_theta1(theta1)
+                pod_artists[idx].set_theta2(theta2)
+                pod_artists[idx]._recompute_path()
+                back_artists[check_id + 1].set_color((1, 0, 0))
+            return pod_artists
 
-        anim = FuncAnimation(plt.gcf(), do_animate, init_func = draw_checks, interval = 300, frames = frames, blit = True)
-        plt.legend(artists, [
+        anim = FuncAnimation(plt.gcf(), do_animate, init_func = draw_background, interval = 300, frames = frames, blit = True)
+        plt.legend(pod_artists, [
             "Player {} ({})".format(p, type(self.players[p].controller).__name__)
             for p in range(len(self.players))
         ])
@@ -124,20 +137,17 @@ class Drawer:
         """
         Display a graph of the rewards for each player at each turn
         """
-        rewards = [[reward(p.pod, self.board)] for p in self.players]
-        for frame in range(max_frames):
-            for p in range(len(self.players)):
-                self.players[p].step(self.board)
-                rewards[p].append(reward(self.players[p].pod, self.board))
+        for (idx, player) in enumerate(self.players):
+            rewards = [reward(player.pod, self.board)]
+            for frame in range(max_frames):
+                player.step(self.board)
+                rewards.append(reward(player.pod, self.board))
+            plt.plot(rewards,
+                     color=gen_color(idx),
+                     label="Player {} ({})".format(idx, type(player.controller).__name__))
 
-        for (idx, r) in enumerate(rewards):
-            plt.plot(r, color=gen_color(idx))
-
-        plt.legend([
-            "Player {} ({})".format(p, type(self.players[p].controller).__name__)
-            for p in range(len(self.players))
-        ])
-        plt.ylabel('reward')
-        plt.xlabel('player')
+        plt.legend(loc="upper left")
+        plt.ylabel('Reward')
+        plt.xlabel('Turns')
         plt.grid(axis='y')
         plt.show()
