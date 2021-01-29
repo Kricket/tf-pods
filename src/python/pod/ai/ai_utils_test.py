@@ -2,7 +2,7 @@ import math
 from unittest import TestCase
 
 from pod.ai.ai_utils import play_to_action, action_to_play, THRUST_VALUES, ANGLE_VALUES, THRUST_INC, ANGLE_INC, \
-    action_to_output, state_to_vector, MAX_VEL, MAX_DIST, get_best_action, frange, gen_pods
+    action_to_output, get_best_action, gen_pods
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.util import PodState
@@ -94,38 +94,6 @@ class AIUtilsTest(TestCase):
         self.assertAlmostEqual(rel_target.y, 0)
         self.assertGreater(rel_target.x, 1)
 
-    def test_state_to_vector_works1(self):
-        state = state_to_vector(
-            Vec2(100, 100), # position
-            Vec2(0, MAX_VEL), # velocity: straight up
-            -math.pi, # angle: pointing down -X
-            Vec2(100 + MAX_DIST, 100), # target check: behind the pod in X direction
-            Vec2(100 + MAX_DIST, 100 + MAX_DIST) # next check: right turn from target check
-        )
-
-        self.assertAlmostEqual(state[0], 0, msg="velocity x")
-        self.assertAlmostEqual(state[1], -1, msg="velocity y")
-        self.assertAlmostEqual(state[2], -1, msg="check1 x")
-        self.assertAlmostEqual(state[3], 0, msg="check1 y")
-        self.assertAlmostEqual(state[4], -1, msg="check2 x")
-        self.assertAlmostEqual(state[5], -1, msg="check2 y")
-
-    def test_state_to_vector_works2(self):
-        state = state_to_vector(
-            Vec2(-100, -100), # position
-            Vec2(-3, -3), # velocity: 45 degrees down-left
-            math.pi / 2, # angle: pointing up Y
-            Vec2(-100, 1000), # target check: in front of Pod
-            Vec2(-100, 3000) # next check: in same direction
-        )
-
-        self.assertAlmostEqual(state[0], -3 / MAX_VEL, msg="velocity x")
-        self.assertAlmostEqual(state[1], 3 / MAX_VEL, msg="velocity y")
-        self.assertAlmostEqual(state[2], 1100 / MAX_DIST, msg="check1 x")
-        self.assertAlmostEqual(state[3], 0, msg="check1 y")
-        self.assertAlmostEqual(state[4], 3100 / MAX_DIST, msg="check2 x")
-        self.assertAlmostEqual(state[5], 0, msg="check2 y")
-
     def __do_get_best_action_assert(self, board, pod, exp_thrust, exp_angle):
         action = get_best_action(board, pod)
 
@@ -144,17 +112,17 @@ class AIUtilsTest(TestCase):
 
     def test_get_best_action_works_left(self):
         board = PodBoard([Vec2(5000, 5000), Vec2(1000, 1000)])
-        # Pod is directly below the check, but the check is to its left
+        # Pod is directly below the check, but the check is behind and to its left
         pod = PodState(Vec2(5000, 0))
-        pod.angle = 0
+        pod.angle = -math.pi / 4
 
         self.__do_get_best_action_assert(board, pod, 0, Constants.max_turn())
 
     def test_get_best_action_works_right(self):
         board = PodBoard([Vec2(5000, 5000), Vec2(1000, 1000)])
-        # Pod is directly below the check, but the check is to its right
+        # Pod is directly below the check, but the check is behind and to its right
         pod = PodState(Vec2(5000, 0))
-        pod.angle = -math.pi
+        pod.angle = math.pi * 1.25
 
         self.__do_get_best_action_assert(board, pod, 0, -Constants.max_turn())
 
@@ -174,31 +142,19 @@ class AIUtilsTest(TestCase):
 
         self.__do_get_best_action_assert(board, pod, 0, -Constants.max_turn())
 
-    def test_frange(self):
-        fr = frange(-0.2, 0.2, 5)
-        fr_list = list(fr)
-        self.assertEqual(len(fr_list), 5)
-        self.assertAlmostEqual(fr_list[0],-0.2)
-        self.assertAlmostEqual(fr_list[1],-0.1)
-        self.assertAlmostEqual(fr_list[2], 0.0)
-        self.assertAlmostEqual(fr_list[3], 0.1)
-        self.assertAlmostEqual(fr_list[4], 0.2)
-
-    def test_frange_single_element(self):
-        result = list(frange(1, 2, 1))
-        self.assertEqual(len(result), 1)
-        self.assertAlmostEqual(result[0], 1)
-
     def test_gen_pods(self):
         pods = gen_pods(
             ORIGIN,
-            frange(1, 2, 1),
-            frange(1, 2, 1),
-            frange(0, 1, 1),
-            frange(1, 2, 1))
+            [1],
+            [1.0],
+            [0.0],
+            [1.0])
+
         self.assertEqual(len(pods), 1)
+
         pod = pods[0]
         self.assertEqual(pod.pos, Vec2(1, 1))
         self.assertAlmostEqual(pod.angle, -.75 * math.pi + 1)
+
         expected_vel = UNIT.rotate(-.75 * math.pi)
         self.assertEqual(pod.vel, expected_vel, "{} should be {}".format(pod.vel,expected_vel))

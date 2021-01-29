@@ -46,11 +46,11 @@ class PodState:
     """
     The full internal state of a pod
     """
-    def __init__(self, start_pos: Vec2 = ORIGIN):
-        self.pos = start_pos
-        self.vel = ORIGIN
-        self.angle = 0.0
-        self.nextCheckId = 0
+    def __init__(self, pos: Vec2 = ORIGIN, vel: Vec2 = ORIGIN, angle: float = 0.0, next_check_id: int = 0):
+        self.pos = pos
+        self.vel = vel
+        self.angle = angle
+        self.nextCheckId = next_check_id
         self.laps = 0
         self.turns = 0
 

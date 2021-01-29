@@ -1,5 +1,5 @@
 import math
-from typing import Tuple, List, Generator
+from typing import Tuple, List
 
 import numpy as np
 from pod.board import PodBoard
@@ -8,9 +8,6 @@ from pod.controller import PlayOutput
 from pod.game import game_step
 from pod.util import PodState, clean_angle
 from vec2 import Vec2, UNIT
-
-# Length of the state vector (model input)
-STATE_VECTOR_LEN = 6
 
 # Maximum speed that a pod can attain through normal acceleration (tested empirically)
 MAX_VEL = 558
@@ -85,47 +82,14 @@ def reward(pod: PodState, board: PodBoard) -> int:
     return ang_bonus + check_bonus - dist_penalty + 1
 
 
-def state_to_vector(
-        pod_pos: Vec2,
-        pod_vel: Vec2,
-        pod_angle: float,
-        target_check: Vec2,
-        next_check: Vec2
-) -> List[float]:
-    # Velocity is already relative to the pod, so it just needs to be rotated
-    vel = pod_vel.rotate(-pod_angle) / MAX_VEL
-    check1 = (target_check - pod_pos).rotate(-pod_angle) / MAX_DIST
-    check2 = (next_check - pod_pos).rotate(-pod_angle) / MAX_DIST
-
-    res = [vel.x, vel.y, check1.x, check1.y, check2.x, check2.y]
-    return res
-
-
-def frange(mini: float, maxi: float, steps: int):
-    """
-    Generate 'steps' values from mini to maxi (including both endpoints)
-    """
-    if steps <= 1:
-        yield mini
-    else:
-        total = maxi - mini
-        step_size = total / (steps - 1) # So that we include min and max
-        for i in range(steps):
-            yield mini + step_size * i
-
-
 def gen_pods(
         checkpoint: Vec2,
-        xy_range: Generator[float, None, None],
-        ang_range: Generator[float, None, None],
-        vel_ang_range: Generator[float, None, None],
-        vel_mag_range: Generator[float, None, None]
+        xy_list: List[int],
+        ang_list: List[float],
+        vel_ang_list: List[float],
+        vel_mag_list: List[float]
 ):
     pods = []
-    xy_list = list(xy_range)
-    ang_list = list(ang_range)
-    vel_ang_list = list(vel_ang_range)
-    vel_mag_list = list(vel_mag_range)
 
     for x in xy_list:
         for y in xy_list:
