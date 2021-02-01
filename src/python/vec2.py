@@ -79,9 +79,9 @@ class Vec2(object):
     def truncate(self):
         return Vec2(math.floor(self.x), math.floor(self.y))
 
-    def rotate(self, angle):
-        cos = math.cos(angle)
-        sin = math.sin(angle)
+    def rotate(self, radians):
+        cos = math.cos(radians)
+        sin = math.sin(radians)
         return Vec2(cos * self.x - sin * self.y,
                     sin * self.x + cos * self.y)
 
