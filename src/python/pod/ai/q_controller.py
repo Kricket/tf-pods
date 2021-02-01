@@ -1,14 +1,12 @@
 import math
 import random
-from typing import List, Union, Generator
+from typing import List, Union
 
 import numpy as np
-
 from pod.ai.ai_utils import MAX_VEL, reward
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import Controller, PlayOutput, PlayInput
-
 ###############################################
 # Discretized state space
 from pod.game import game_step

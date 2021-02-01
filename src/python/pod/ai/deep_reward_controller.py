@@ -3,7 +3,7 @@ from typing import Union, List
 import tensorflow as tf
 
 import numpy as np
-from pod.ai.ai_utils import NUM_ACTIONS, action_to_output, get_best_action, MAX_VEL, MAX_DIST
+from pod.ai.ai_utils import MAX_VEL, MAX_DIST, ActionDiscretizer
 from pod.board import PodBoard
 from pod.controller import Controller, PlayInput, PlayOutput
 from pod.util import PodState
@@ -28,8 +28,9 @@ class DeepRewardController(Controller):
     A Controller that uses a NN to try to predict what action will produce
     the highest reward.
     """
-    def __init__(self, board: PodBoard, model = None):
+    def __init__(self, board: PodBoard, model = None, discretizer: ActionDiscretizer = ActionDiscretizer()):
         self.board = board
+        self.ad = discretizer
 
         if model is None:
             self.model = tf.keras.Sequential([
@@ -40,7 +41,7 @@ class DeepRewardController(Controller):
                     activation="sigmoid",
                 ),
                 tf.keras.layers.Dense(
-                    NUM_ACTIONS,
+                    self.ad.num_actions,
                     kernel_initializer="zeros",
                 ),
             ])
@@ -53,12 +54,12 @@ class DeepRewardController(Controller):
             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
         )
 
-        self.best_actions = list(0 for _ in range(NUM_ACTIONS))
+        self.best_actions = list(0 for _ in range(self.ad.num_actions))
 
     def play(self, pi: PlayInput) -> PlayOutput:
         output = self.__get_output(pi)
         best_action = np.argmax(output)
-        return action_to_output(best_action, pi.angle, pi.pos)
+        return self.ad.action_to_output(best_action, pi.angle, pi.pos)
 
     def __get_output(self, pi: Union[PlayInput, PodState]):
         """
@@ -71,15 +72,15 @@ class DeepRewardController(Controller):
         """
         Get an output array with the action with the highest reward set, and the others at 0
         """
-        best_action = get_best_action(self.board, pod)
+        best_action = self.ad.get_best_action(self.board, pod)
         self.best_actions[best_action] += 1
-        result = np.zeros((1, NUM_ACTIONS))
+        result = np.zeros((1, self.ad.num_actions))
         result[0][best_action] = 1.0
         return result
 
     def train(self, pods: List[PodState], epochs: int = 10):
         states = np.array(list(state_to_vector(p, self.board) for p in pods))
-        labels = np.array(list(get_best_action(self.board, pod) for pod in pods))
+        labels = np.array(list(self.ad.get_best_action(self.board, pod) for pod in pods))
         return self.model.fit(states, labels, epochs=epochs, callbacks=[
             tf.keras.callbacks.ReduceLROnPlateau(monitor="accuracy", factor=0.5, patience=5, min_delta=0.001)
         ])

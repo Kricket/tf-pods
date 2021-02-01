@@ -1,8 +1,7 @@
 import math
 from unittest import TestCase
 
-from pod.ai.ai_utils import play_to_action, action_to_play, THRUST_VALUES, ANGLE_VALUES, THRUST_INC, ANGLE_INC, \
-    action_to_output, get_best_action, gen_pods
+from pod.ai.ai_utils import ActionDiscretizer, gen_pods
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.util import PodState
@@ -10,9 +9,12 @@ from vec2 import Vec2, ORIGIN, UNIT
 
 
 class AIUtilsTest(TestCase):
+    def setUp(self):
+        self.ad = ActionDiscretizer(3, 3)
+
     def __do_p_a_p(self, thrust, angle):
-        action = play_to_action(thrust, angle)
-        new_thrust, new_angle = action_to_play(action)
+        action = self.ad.play_to_action(thrust, angle)
+        new_thrust, new_angle = self.ad.action_to_play(action)
         self.assertEqual(thrust, new_thrust)
         self.assertEqual(angle, new_angle)
 
@@ -32,13 +34,14 @@ class AIUtilsTest(TestCase):
         self.__do_p_a_p(0, -Constants.max_turn())
 
     def test_play_to_action_to_play_rounds_thrust(self):
-        action = play_to_action(3, 0)
-        thrust, angle = action_to_play(action)
+        action = self.ad.play_to_action(3, 0)
+        thrust, angle = self.ad.action_to_play(action)
         self.assertEqual(thrust, 0)
         self.assertEqual(angle, 0)
+
     def test_play_to_action_to_play_rounds_angle(self):
-        action = play_to_action(0, Constants.max_turn() * 0.001)
-        thrust, angle = action_to_play(action)
+        action = self.ad.play_to_action(0, Constants.max_turn() * 0.001)
+        thrust, angle = self.ad.action_to_play(action)
         self.assertEqual(thrust, 0)
         self.assertEqual(angle, 0)
 
@@ -46,24 +49,24 @@ class AIUtilsTest(TestCase):
         outputs = set()
         angles = set()
         thrusts = set()
-        for action in range(0, THRUST_VALUES * ANGLE_VALUES):
-            thrust, angle = action_to_play(action)
+        for action in range(0, self.ad.num_actions):
+            thrust, angle = self.ad.action_to_play(action)
             outputs.add((thrust, angle))
             angles.add(angle)
             thrusts.add(thrust)
 
-        self.assertEqual(len(outputs), THRUST_VALUES * ANGLE_VALUES)
-        self.assertEqual(len(angles), ANGLE_VALUES)
-        self.assertEqual(len(thrusts), THRUST_VALUES)
+        self.assertEqual(len(outputs), self.ad.num_actions)
+        self.assertEqual(len(angles), self.ad.num_angle)
+        self.assertEqual(len(thrusts), self.ad.num_thrust)
 
-        for t in range(0, THRUST_VALUES):
-            self.assertTrue((THRUST_INC * t) in thrusts)
-        for a in range(0, ANGLE_VALUES):
-            self.assertTrue((ANGLE_INC * a - Constants.max_turn()) in angles)
+        for t in range(0, self.ad.num_thrust):
+            self.assertTrue((self.ad._thrust_inc * t) in thrusts)
+        for a in range(0, self.ad.num_angle):
+            self.assertTrue((self.ad._angle_inc * a - Constants.max_turn()) in angles)
 
     def test_action_to_output_simple(self):
-        action = play_to_action(100, 0)
-        po = action_to_output(action, 0, Vec2(100, 100))
+        action = self.ad.play_to_action(100, 0)
+        po = self.ad.action_to_output(action, 0, Vec2(100, 100))
         # The thrust should not have changed
         self.assertEqual(po.thrust, 100)
         # The pod is at (100, 100), angle 0, requested turn 0...so it should be aiming in the x direction
@@ -71,9 +74,9 @@ class AIUtilsTest(TestCase):
         self.assertGreater(po.target.x, 100)
 
     def test_action_to_output_turn_right(self):
-        action = play_to_action(50, Constants.max_turn())
+        action = self.ad.play_to_action(50, Constants.max_turn())
         pod_pos = Vec2(100, 100)
-        po = action_to_output(action, 1.23, pod_pos)
+        po = self.ad.action_to_output(action, 1.23, pod_pos)
         # The thrust should not have changed
         self.assertEqual(po.thrust, 50)
         # The pod is at (100, 100), angle 1.23, requested turn max_turn...
@@ -83,9 +86,9 @@ class AIUtilsTest(TestCase):
         self.assertGreater(rel_target.x, 1)
 
     def test_action_to_output_turn_left(self):
-        action = play_to_action(50, -Constants.max_turn())
+        action = self.ad.play_to_action(50, -Constants.max_turn())
         pod_pos = Vec2(100, 100)
-        po = action_to_output(action, 1.23, pod_pos)
+        po = self.ad.action_to_output(action, 1.23, pod_pos)
         # The thrust should not have changed
         self.assertEqual(po.thrust, 50)
         # The pod is at (100, 100), angle 1.23, requested turn max_turn...
@@ -95,9 +98,9 @@ class AIUtilsTest(TestCase):
         self.assertGreater(rel_target.x, 1)
 
     def __do_get_best_action_assert(self, board, pod, exp_thrust, exp_angle):
-        action = get_best_action(board, pod)
+        action = self.ad.get_best_action(board, pod)
 
-        thrust, angle = action_to_play(action)
+        thrust, angle = self.ad.action_to_play(action)
 
         self.assertAlmostEqual(thrust, exp_thrust)
         self.assertAlmostEqual(angle, exp_angle)

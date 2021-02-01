@@ -14,51 +14,68 @@ MAX_VEL = 558
 # Distance to use for scaling inputs
 MAX_DIST = Vec2(Constants.world_x(), Constants.world_y()).length()
 
-THRUST_VALUES = 3
-ANGLE_VALUES = 3
-NUM_ACTIONS = THRUST_VALUES * ANGLE_VALUES
 
-THRUST_INC = Constants.max_thrust() / (THRUST_VALUES - 1)
-ANGLE_INC = Constants.max_turn() * 2 / (ANGLE_VALUES - 1)
+class ActionDiscretizer:
+    def __init__(self, num_thrust: int = 3, num_angle: int = 3):
+        self.num_thrust = num_thrust
+        self.num_angle = num_angle
+        self.num_actions = num_thrust * num_angle
 
+        self._thrust_inc = Constants.max_thrust() / (self.num_thrust - 1)
+        self._angle_inc = Constants.max_turn() * 2 / (self.num_angle - 1)
 
-def play_to_action(thrust: int, angle: float) -> int:
-    """
-    Given a legal play (angle/thrust), find the nearest discrete action
-    """
-    thrust_pct = thrust / Constants.max_thrust()
-    angle_pct = (angle + Constants.max_turn()) / (2 * Constants.max_turn())
-    thrust_idx = math.floor(thrust_pct * (THRUST_VALUES - 1))
-    angle_idx = math.floor(angle_pct * (ANGLE_VALUES - 1))
-    return math.floor(thrust_idx * ANGLE_VALUES + angle_idx)
+    def play_to_action(self, thrust: int, angle: float) -> int:
+        """
+        Given a legal play (angle/thrust), find the nearest discrete action
+        """
+        thrust_pct = thrust / Constants.max_thrust()
+        angle_pct = (angle + Constants.max_turn()) / (2 * Constants.max_turn())
+        thrust_idx = math.floor(thrust_pct * (self.num_thrust - 1))
+        angle_idx = math.floor(angle_pct * (self.num_angle - 1))
+        return math.floor(thrust_idx * self.num_angle + angle_idx)
 
+    def action_to_play(self, action: int) -> Tuple[int, float]:
+        """
+        Convert an action (in [0, THRUST_VALUES * ANGLE_VALUES - 1]) into the thrust, angle to play
+        """
+        # An integer in [0, THRUST_VALUES - 1]
+        thrust_idx = int(action / self.num_angle)
+        # An integer in [0, ANGLE_VALUES - 1]
+        angle_idx = action % self.num_angle
+        return thrust_idx * self._thrust_inc, angle_idx * self._angle_inc - Constants.max_turn()
 
-def action_to_play(action: int) -> Tuple[int, float]:
-    """
-    Convert an action (in [0, THRUST_VALUES * ANGLE_VALUES - 1]) into the thrust, angle to play
-    """
-    # An integer in [0, THRUST_VALUES - 1]
-    thrust_idx = int(action / ANGLE_VALUES)
-    # An integer in [0, ANGLE_VALUES - 1]
-    angle_idx = action % ANGLE_VALUES
-    return thrust_idx * THRUST_INC, angle_idx * ANGLE_INC - Constants.max_turn()
+    def action_to_output(self, action: int, pod_angle: float, pod_pos: Vec2, po: PlayOutput = None) -> PlayOutput:
+        """
+        Convert an integer action to a PlayOutput for the given pod state
+        """
+        if po is None:
+            po = PlayOutput()
 
+        (thrust, rel_angle) = self.action_to_play(action)
+        po.thrust = thrust
 
-def action_to_output(action: int, pod_angle: float, pod_pos: Vec2, po: PlayOutput = None) -> PlayOutput:
-    """
-    Convert an integer action to a PlayOutput for the given pod state
-    """
-    if po is None:
-        po = PlayOutput()
+        real_angle = rel_angle + pod_angle
+        real_dir = UNIT.rotate(real_angle) * 1000
+        po.target = pod_pos + real_dir
 
-    (thrust, rel_angle) = action_to_play(action)
-    po.thrust = thrust
+        return po
 
-    real_angle = rel_angle + pod_angle
-    real_dir = UNIT.rotate(real_angle) * 1000
-    po.target = pod_pos + real_dir
+    def get_best_action(self, board: PodBoard, pod: PodState) -> int:
+        """
+        Get the action that will result in the highest reward for the given state
+        """
+        best_action = 0
+        best_reward = -999
 
-    return po
+        for action in range(self.num_actions):
+            next_state = PodState()
+            game_step(board, pod, self.action_to_output(action, pod.angle, pod.pos), next_state)
+            r = reward(next_state, board)
+            if r > best_reward:
+                best_reward = r
+                best_action = action
+
+        return best_action
 
 
 def reward(pod: PodState, board: PodBoard) -> int:
@@ -111,21 +128,3 @@ def gen_pods(
     np.random.shuffle(pods)
     print("{} pods generated".format(len(pods)))
     return pods
-
-
-def get_best_action(board: PodBoard, pod: PodState) -> int:
-    """
-    Get the action that will result in the highest reward for the given state
-    """
-    best_action = 0
-    best_reward = -999
-
-    for action in range(NUM_ACTIONS):
-        next_state = PodState()
-        game_step(board, pod, action_to_output(action, pod.angle, pod.pos), next_state)
-        r = reward(next_state, board)
-        if r > best_reward:
-            best_reward = r
-            best_action = action
-
-    return best_action
