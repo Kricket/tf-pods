@@ -3,7 +3,7 @@ import random
 from typing import List, Union
 
 import numpy as np
-from pod.ai.ai_utils import MAX_VEL, reward
+from pod.ai.ai_utils import MAX_VEL, calc_reward
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import Controller, PlayOutput, PlayInput
@@ -143,13 +143,13 @@ class QController(Controller):
                     next_state = pod_to_state(pod, self.board)
                     tries += 1
 
-                r = reward(pod, self.board)
+                reward = calc_reward(pod, self.board)
 
                 # Update the Q-table
                 self.q_table[current_state, action] = (1 - learning_rate) * self.q_table[current_state, action] \
-                    + learning_rate * (r + future_discount * max(self.q_table[next_state,:]))
+                    + learning_rate * (reward + future_discount * max(self.q_table[next_state,:]))
 
-                total_ep_reward += r
+                total_ep_reward += reward
                 current_state = next_state
 
             reward_per_ep.append(total_ep_reward)

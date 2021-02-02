@@ -70,15 +70,15 @@ class ActionDiscretizer:
         for action in range(self.num_actions):
             next_state = PodState()
             game_step(board, pod, self.action_to_output(action, pod.angle, pod.pos), next_state)
-            r = reward(next_state, board)
-            if r > best_reward:
-                best_reward = r
+            reward = calc_reward(next_state, board)
+            if reward > best_reward:
+                best_reward = reward
                 best_action = action
 
         return best_action
 
 
-def reward(pod: PodState, board: PodBoard) -> int:
+def calc_reward(pod: PodState, board: PodBoard) -> int:
     """
     Calculate the reward value for the given pod on the given board
     """
@@ -94,9 +94,9 @@ def reward(pod: PodState, board: PodBoard) -> int:
     # Bonus: a tiny amount if the pod is pointing at the next check (helps to distinguish between
     # states with 0 thrust)
     ang_diff = clean_angle(pod_to_check.angle() - pod.angle)
-    ang_bonus = 0.1 * (math.pi - math.fabs(ang_diff)) / math.pi
+    ang_bonus = 0.01 * (math.pi - math.fabs(ang_diff)) / math.pi
 
-    return ang_bonus + check_bonus - dist_penalty + 1
+    return ang_bonus + 3*check_bonus - dist_penalty + 1
 
 
 def gen_pods(
