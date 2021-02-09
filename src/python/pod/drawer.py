@@ -5,6 +5,7 @@ import math
 
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.patches import Circle, Wedge, Rectangle
+from IPython.display import Image
 
 from pod.ai.rewards import dense_reward
 from pod.constants import Constants
@@ -90,12 +91,12 @@ class Drawer:
         return frames
 
 
-    def animate(self, filename, max_frames: int = 200, max_laps: int = 5):
+    def animate(self, max_frames: int = 200, max_laps: int = 5, filename = '/tmp/pods.gif'):
         """
         Generate an animated GIF of the players running through the game
-        :param filename: Where to store the generated file
         :param max_frames: Max number of turns to play
         :param max_laps: Max number of laps for any player
+        :param filename: Where to store the generated file
         """
         self.__prepare()
 
@@ -131,6 +132,7 @@ class Drawer:
         ])
         plt.close(self.fig)
         anim.save(filename, writer = PillowWriter(fps=10))
+        return Image(filename = filename)
 
 
     def chart_rewards(self, max_frames: int = 100):
