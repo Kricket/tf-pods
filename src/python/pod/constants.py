@@ -1,5 +1,8 @@
 import math
 
+from vec2 import Vec2
+
+
 class Constants:
     @staticmethod
     def world_x():
@@ -37,3 +40,9 @@ class Constants:
     @staticmethod
     def max_thrust():
         return 100
+    @staticmethod
+    def max_vel():
+        """
+        Maximum speed that a pod can attain through normal acceleration (tested empirically)
+        """
+        return 558

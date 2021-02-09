@@ -3,8 +3,10 @@ from typing import Union, List
 import tensorflow as tf
 
 import numpy as np
-from pod.ai.ai_utils import MAX_VEL, MAX_DIST, ActionDiscretizer
+from pod.ai.action_discretizer import ActionDiscretizer
+from pod.ai.ai_utils import MAX_DIST
 from pod.board import PodBoard
+from pod.constants import Constants
 from pod.controller import Controller, PlayInput, PlayOutput
 from pod.util import PodState
 
@@ -16,7 +18,7 @@ def state_to_vector(pod: Union[PlayInput, PodState], board: PodBoard) -> List[fl
     Convert a PodState to an input vector that can be used for the neural network
     """
     # Velocity is already relative to the pod, so it just needs to be rotated
-    vel = pod.vel.rotate(-pod.angle) / MAX_VEL
+    vel = pod.vel.rotate(-pod.angle) / Constants.max_vel()
 
     check1 = (board.get_check(pod.nextCheckId) - pod.pos).rotate(-pod.angle) / MAX_DIST
 

@@ -6,7 +6,7 @@ import math
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.patches import Circle, Wedge, Rectangle
 
-from pod.ai.ai_utils import calc_reward
+from pod.ai.rewards import dense_reward
 from pod.constants import Constants
 from pod.board import PodBoard
 from pod.game import Player
@@ -138,10 +138,10 @@ class Drawer:
         Display a graph of the rewards for each player at each turn
         """
         for (idx, player) in enumerate(self.players):
-            rewards = [calc_reward(player.pod, self.board)]
+            rewards = [dense_reward(player.pod, self.board)]
             for frame in range(max_frames):
                 player.step(self.board)
-                rewards.append(calc_reward(player.pod, self.board))
+                rewards.append(dense_reward(player.pod, self.board))
             plt.plot(rewards,
                      color=gen_color(idx),
                      label="Player {} ({})".format(idx, type(player.controller).__name__))

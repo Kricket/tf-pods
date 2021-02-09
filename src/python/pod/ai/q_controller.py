@@ -3,15 +3,17 @@ import random
 from typing import List, Union
 
 import numpy as np
-from pod.ai.ai_utils import MAX_VEL, calc_reward
+from pod.ai.rewards import dense_reward
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import Controller, PlayOutput, PlayInput
-###############################################
-# Discretized state space
 from pod.game import game_step
 from pod.util import PodState
 from vec2 import UNIT, Vec2
+
+
+###############################################
+# Discretized state space
 
 # Square of distance from pod to next check
 DIST_SQ_STATES = [a**2 for a in [
@@ -38,7 +40,7 @@ ANG_STATES = [
 VEL_ANG_STATES = [s for s in ANG_STATES]
 
 # Magnitude squared of pod velocity
-VEL_MAG_SQ_STATES = [v ** 2 for v in [x * MAX_VEL / 5 for x in range(1, 5)]]
+VEL_MAG_SQ_STATES = [v ** 2 for v in [x * Constants.max_vel() / 5 for x in range(1, 5)]]
 
 TOTAL_STATES = len(DIST_SQ_STATES) * len(ANG_STATES) * len(VEL_ANG_STATES) * len(VEL_MAG_SQ_STATES)
 
@@ -143,7 +145,7 @@ class QController(Controller):
                     next_state = pod_to_state(pod, self.board)
                     tries += 1
 
-                reward = calc_reward(pod, self.board)
+                reward = dense_reward(pod, self.board)
 
                 # Update the Q-table
                 self.q_table[current_state, action] = (1 - learning_rate) * self.q_table[current_state, action] \

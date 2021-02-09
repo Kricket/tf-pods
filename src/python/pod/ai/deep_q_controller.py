@@ -1,22 +1,22 @@
 import math
+import random
 from typing import Union, List, Tuple
 
-import random
 import tensorflow as tf
-import numpy as np
 
-from pod.ai.ai_utils import MAX_VEL, MAX_DIST, ActionDiscretizer, calc_reward
+import numpy as np
+from pod.ai.action_discretizer import ActionDiscretizer
+from pod.ai.ai_utils import MAX_DIST
+from pod.ai.rewards import diff_reward
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import Controller, PlayInput, PlayOutput
 from pod.game import game_step
-
 from pod.util import PodState
+from vec2 import UNIT
 
 
 # Size of the vector returned by state_to_vector
-from vec2 import UNIT
-
 STATE_VECTOR_LEN = 6
 
 def state_to_vector(pod: Union[PlayInput, PodState], board: PodBoard) -> List[float]:
@@ -24,7 +24,7 @@ def state_to_vector(pod: Union[PlayInput, PodState], board: PodBoard) -> List[fl
     Convert a PodState to an input vector that can be used for the neural network
     """
     # Velocity is already relative to the pod, so it just needs to be rotated
-    vel = pod.vel.rotate(-pod.angle) / MAX_VEL
+    vel = pod.vel.rotate(-pod.angle) / Constants.max_vel()
 
     check1 = (board.get_check(pod.nextCheckId) - pod.pos).rotate(-pod.angle) / MAX_DIST
     check2 = (board.get_check(pod.nextCheckId + 1) - pod.pos).rotate(-pod.angle) / MAX_DIST
@@ -47,6 +47,9 @@ class ReplayBuffer:
 
     def sample(self, size: int):
         return random.sample(self.buffer, size)
+
+    def clear(self):
+        self.buffer = []
 
 
 def sparse_reward(pod: PodState, board: PodBoard) -> float:
@@ -123,7 +126,7 @@ class DeepQController(Controller):
         """
         next_pod = PodState()
         game_step(self.board, pod, self.ad.action_to_output(action, pod.angle, pod.pos), next_pod)
-        reward = calc_reward(next_pod, self.board)
+        reward = diff_reward(pod, next_pod, self.board)
 
         return next_pod, state_to_vector(next_pod, self.board), reward
 
@@ -196,7 +199,36 @@ class DeepQController(Controller):
                 epsilon *= epsilon_decay
                 accuracy += self.__learn(future_discount)
 
-            print("Episode {} epsilon {} reward {}".format(
-                episode, epsilon, reward_per_ep[-1]))
+            print("Episode {}/{} epsilon {} total reward {}".format(
+                episode, num_episodes, epsilon, reward_per_ep[-1]))
 
         return reward_per_ep, accuracy
+
+    def train_from_examples(self,
+                            pods: List[PodState],
+                            num_episodes: int = 300,
+                            exploration_episodes: int = 50,
+                            epsilon_decay: float = 0.95,
+                            future_discount: float = 0.7,
+                            ):
+        print("Building states for each pod...")
+        pod_states = [state_to_vector(pod, self.board) for pod in pods]
+
+        self.replay.capacity = len(pods)
+
+        accuracy = []
+        epsilon = 1.0
+        for episode in range(num_episodes):
+            print("Starting episode {}/{}  epsilon = {}".format(episode, num_episodes, epsilon))
+            self.replay.clear()
+            for pod, current_state in zip(pods, pod_states):
+                action = self.__choose_action(current_state, epsilon)
+                next_pod, next_state, reward = self.__step(pod, action)
+                self.replay.add(current_state, action, reward, next_state)
+
+            accuracy += self.__learn(future_discount)
+
+            if episode > exploration_episodes:
+                epsilon *= epsilon_decay
+
+        return accuracy

@@ -1,4 +1,5 @@
-from pod.ai.ai_utils import calc_reward, ActionDiscretizer
+from pod.ai.action_discretizer import ActionDiscretizer
+from pod.ai.rewards import dense_reward
 from pod.board import PodBoard
 from pod.controller import Controller, PlayInput, PlayOutput
 from pod.game import game_step
@@ -20,7 +21,7 @@ class RewardController(Controller):
             play = self.ad.action_to_output(action, pi.angle, pi.pos)
             pod = pi.as_pod()
             game_step(self.board, pod, play, pod)
-            reward = calc_reward(pod, self.board)
+            reward = dense_reward(pod, self.board)
             rewards.append(reward)
             if reward > best_reward:
                 best_reward = reward
