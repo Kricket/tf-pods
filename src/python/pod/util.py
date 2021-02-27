@@ -15,9 +15,8 @@ def within(value: float, mini: float, maxi: float) -> float:
 
 def clean_angle(angle: float) -> float:
     """
-    Return the given angle, adjusted to be in [-pi, pi]
     :param angle: Angle in radians
-    :return: Same angle, in the legal range
+    :return: Same angle, in the range [-pi, pi]
     """
     while angle < -math.pi:
         angle += 2 * math.pi
@@ -74,3 +73,9 @@ class PodState:
         self.nextCheckId = state[3]
         self.laps = state[4]
         self.turns = state[5]
+
+    def clone(self):
+        other = PodState(self.pos, self.vel, self.angle, self.nextCheckId)
+        other.laps = self.laps
+        other.turns = self.turns
+        return other

@@ -1,25 +1,22 @@
 import math
 import random
-from typing import Union, List, Tuple
+from typing import List, Tuple, Callable
 
 import tensorflow as tf
 
 import numpy as np
 from pod.ai.action_discretizer import ActionDiscretizer
 from pod.ai.ai_utils import MAX_DIST
-from pod.ai.rewards import diff_reward
 from pod.board import PodBoard
 from pod.constants import Constants
-from pod.controller import Controller, PlayInput, PlayOutput
-from pod.game import game_step
+from pod.controller import Controller, PlayOutput
 from pod.util import PodState
 from vec2 import UNIT
-
 
 # Size of the vector returned by state_to_vector
 STATE_VECTOR_LEN = 6
 
-def state_to_vector(pod: Union[PlayInput, PodState], board: PodBoard) -> List[float]:
+def state_to_vector(pod: PodState, board: PodBoard) -> List[float]:
     """
     Convert a PodState to an input vector that can be used for the neural network
     """
@@ -57,8 +54,13 @@ def sparse_reward(pod: PodState, board: PodBoard) -> float:
 
 
 class DeepQController(Controller):
-    def __init__(self, board: PodBoard, discretizer: ActionDiscretizer = ActionDiscretizer(3,3)):
-        self.board = board
+    def __init__(self,
+                 board: PodBoard,
+                 reward_func: Callable[[PodBoard, PodState, PodState], float],
+                 discretizer: ActionDiscretizer = ActionDiscretizer(3, 3)):
+        super().__init__(board)
+
+        self.reward_func = reward_func
         self.ad = discretizer
         self.replay = ReplayBuffer()
 
@@ -81,22 +83,22 @@ class DeepQController(Controller):
             loss=tf.keras.losses.MeanSquaredError()
         )
 
-    def play(self, pi: PlayInput) -> PlayOutput:
-        return self.ad.action_to_output(self.__get_best_action(pi), pi.angle, pi.pos)
+    def play(self, pod: PodState) -> PlayOutput:
+        return self.ad.action_to_output(self.__get_best_action(pod), pod.angle, pod.pos)
 
-    def __get_output(self, pi: Union[PlayInput, PodState] = None, state_vec = None):
+    def __get_output(self, pod: PodState = None, state_vec = None):
         """
         Get the output of the model for the given input state
         """
         if state_vec is None:
-            state_vec = state_to_vector(pi, self.board)
+            state_vec = state_to_vector(pod, self.board)
         return self.model(tf.constant([state_vec]))
 
-    def __get_best_action(self, pi: Union[PlayInput, PodState] = None, state_vec = None):
+    def __get_best_action(self, pod: PodState = None, state_vec = None):
         """
         Get the action that produces the highest Q-value
         """
-        output = self.__get_output(pi, state_vec)
+        output = self.__get_output(pod, state_vec)
         return np.argmax(output)
 
     def __get_initial_pod(self) -> Tuple[PodState, List[float]]:
@@ -124,9 +126,8 @@ class DeepQController(Controller):
         """
         Get the result of the given pod taking the given action
         """
-        next_pod = PodState()
-        game_step(self.board, pod, self.ad.action_to_output(action, pod.angle, pod.pos), next_pod)
-        reward = diff_reward(pod, next_pod, self.board)
+        next_pod = self.board.step(pod, self.ad.action_to_output(action, pod.angle, pod.pos), PodState())
+        reward = self.reward_func(self.board, pod, next_pod)
 
         return next_pod, state_to_vector(next_pod, self.board), reward
 

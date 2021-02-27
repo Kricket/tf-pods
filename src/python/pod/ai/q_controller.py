@@ -1,13 +1,11 @@
 import math
 import random
-from typing import List, Union
+from typing import List, Callable
 
 import numpy as np
-from pod.ai.rewards import dense_reward
 from pod.board import PodBoard
 from pod.constants import Constants
-from pod.controller import Controller, PlayOutput, PlayInput
-from pod.game import game_step
+from pod.controller import Controller, PlayOutput
 from pod.util import PodState
 from vec2 import UNIT, Vec2
 
@@ -63,7 +61,7 @@ def get_index(value: float, table: List[float]) -> int:
     return len(table) - 1
 
 
-def pod_to_state(pod: Union[PlayInput, PodState], board: PodBoard) -> int:
+def pod_to_state(pod: PodState, board: PodBoard) -> int:
     """
     Get the state ID for the given pod
     """
@@ -100,14 +98,15 @@ class QController(Controller):
     A Controller that uses Q-Learning to win the race. The state and action spaces are discretized
     so that the table is manageable.
     """
-    def __init__(self, board: PodBoard):
-        self.board = board
+    def __init__(self, board: PodBoard, reward_func: Callable[[PodBoard, PodState, PodState], float]):
+        super().__init__(board)
+        self.reward_func = reward_func
         self.q_table = np.zeros((TOTAL_STATES, TOTAL_ACTIONS))
 
-    def play(self, pi: PlayInput) -> PlayOutput:
-        state = pod_to_state(pi, self.board)
+    def play(self, pod: PodState) -> PlayOutput:
+        state = pod_to_state(pod, self.board)
         action = np.argmax(self.q_table[state,:])
-        return action_to_play(action, pi.nextCheck)
+        return action_to_play(action, self.board.checkpoints[pod.nextCheckId])
 
     def train(self,
               num_episodes: int = 10,
@@ -139,13 +138,15 @@ class QController(Controller):
                 # rough, we repeat the action until we get to a new state
                 next_state = current_state
                 play = action_to_play(action, self.board.get_check(pod.nextCheckId))
+
+                old_pod = pod.clone()
                 tries = 0
                 while next_state == current_state and tries < 5:
-                    game_step(self.board, pod, play, pod)
+                    self.board.step(pod, play, pod)
                     next_state = pod_to_state(pod, self.board)
                     tries += 1
 
-                reward = dense_reward(pod, self.board)
+                reward = self.reward_func(self.board, old_pod, pod)
 
                 # Update the Q-table
                 self.q_table[current_state, action] = (1 - learning_rate) * self.q_table[current_state, action] \

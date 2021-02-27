@@ -1,7 +1,5 @@
 import math
 
-from vec2 import Vec2
-
 
 class Constants:
     @staticmethod

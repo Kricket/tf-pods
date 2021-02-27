@@ -1,11 +1,9 @@
 import math
-from typing import Tuple
+from typing import Tuple, Callable
 
-from pod.ai.rewards import dense_reward
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import PlayOutput
-from pod.game import game_step
 from pod.util import PodState
 from vec2 import Vec2, UNIT
 
@@ -58,7 +56,11 @@ class ActionDiscretizer:
 
         return po
 
-    def get_best_action(self, board: PodBoard, pod: PodState) -> int:
+    def get_best_action(self,
+                        board: PodBoard,
+                        pod: PodState,
+                        reward_func: Callable[[PodBoard, PodState, PodState], float]
+                        ) -> int:
         """
         Get the action that will result in the highest reward for the given state
         """
@@ -66,9 +68,9 @@ class ActionDiscretizer:
         best_reward = -999
 
         for action in range(self.num_actions):
-            next_state = PodState()
-            game_step(board, pod, self.action_to_output(action, pod.angle, pod.pos), next_state)
-            reward = dense_reward(next_state, board)
+            play = self.action_to_output(action, pod.angle, pod.pos)
+            next_pod = board.step(pod, play, PodState())
+            reward = reward_func(board, pod, next_pod)
             if reward > best_reward:
                 best_reward = reward
                 best_action = action

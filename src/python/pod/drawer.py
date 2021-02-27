@@ -1,16 +1,17 @@
-from typing import List, Tuple
+from typing import List, Tuple, Callable
 
 import matplotlib.pyplot as plt
 import math
 
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.patches import Circle, Wedge, Rectangle
-from IPython.display import Image
+from IPython.display import Image, display
+from ipywidgets import IntProgress
 
-from pod.ai.rewards import dense_reward
 from pod.constants import Constants
 from pod.board import PodBoard
-from pod.game import Player
+from pod.controller import Controller
+from pod.player import Player
 from pod.util import PodState
 from vec2 import Vec2
 
@@ -19,7 +20,7 @@ from vec2 import Vec2
 PADDING = 3000
 
 
-def gen_color(seed: int) -> Tuple[float, float, float]:
+def _gen_color(seed: int) -> Tuple[float, float, float]:
     """
     Generate a color based on the given seed
     :param seed: A small integer (i.e. the index of the pod)
@@ -29,10 +30,30 @@ def gen_color(seed: int) -> Tuple[float, float, float]:
     return color, 1 - color, seed % 2
 
 
+def _gen_label(idx: int, player: Player) -> str:
+    return "Player {} ({})".format(idx, type(player.controller).__name__)
+
+
 class Drawer:
-    def __init__(self, board: PodBoard, players: List[Player]):
+    def __init__(self,
+                 board: PodBoard,
+                 players: List[Player] = None,
+                 controllers: List[Controller] = None,
+                 labels: List[str] = None):
         self.board = board
-        self.players = players
+        if players is not None:
+            self.players = players
+        elif controllers is not None:
+            self.players = [Player(c) for c in controllers]
+        else:
+            raise ValueError('Must provide either players or controllers')
+        
+        if labels is None:
+            labels = [_gen_label(idx, player) for (idx, player) in enumerate(self.players)]
+        elif len(labels) < len(self.players):
+            for idx in range(len(labels), len(self.players)):
+                labels.append(_gen_label(idx, self.players[idx]))
+        self.labels = labels
 
     def __prepare(self):
         plt.rcParams['figure.figsize'] = [Constants.world_x() / 1000, Constants.world_y() / 1000]
@@ -64,7 +85,7 @@ class Drawer:
             Constants.world_x(), Constants.world_y(),
             ec="black", fc="white")
 
-    def draw(self):
+    def draw_frame(self, pods = None):
         """
         Draw a single frame of the game in its current state (board, players)
         """
@@ -76,8 +97,12 @@ class Drawer:
             circle = self.__draw_check(check, idx)
             self.ax.add_artist(circle)
 
-        for (idx, player) in enumerate(self.players):
-            self.ax.add_artist(self.__get_pod_artist(player.pod, gen_color(idx)))
+        if pods is None:
+            for (idx, player) in enumerate(self.players):
+                self.ax.add_artist(self.__get_pod_artist(player.pod, _gen_color(idx)))
+        else:
+            for (idx, pod) in enumerate(pods):
+                self.ax.add_artist(self.__get_pod_artist(pod, _gen_color(idx)))
 
         plt.show()
 
@@ -85,19 +110,24 @@ class Drawer:
         frames = []
         while max(p.pod.laps for p in self.players) < max_laps and len(frames) < max_frames:
             for p in self.players:
-                p.step(self.board)
+                p.step()
             states = map(lambda pl: self.__pod_wedge_info(pl.pod), self.players)
             frames.append(enumerate(list(states)))
         return frames
 
 
-    def animate(self, max_frames: int = 200, max_laps: int = 5, filename = '/tmp/pods.gif'):
+    def animate(self, max_frames: int = 200, max_laps: int = 5, filename = '/tmp/pods.gif', reset: bool = True):
         """
         Generate an animated GIF of the players running through the game
-        :param max_frames: Max number of turns to play
-        :param max_laps: Max number of laps for any player
-        :param filename: Where to store the generated file
+        :param max_frames Max number of turns to play
+        :param max_laps Max number of laps for any player
+        :param filename Where to store the generated file
+        :param reset Whether to reset the state of each Player first
         """
+        if reset:
+            for p in self.players:
+                p.reset()
+
         self.__prepare()
 
         back_artists = []
@@ -111,9 +141,14 @@ class Drawer:
 
             return back_artists
 
-        pod_artists = list(self.__get_pod_artist(p.pod, gen_color(idx)) for (idx, p) in enumerate(self.players))
+        pod_artists = list(self.__get_pod_artist(p.pod, _gen_color(idx)) for (idx, p) in enumerate(self.players))
         for a in pod_artists: self.ax.add_artist(a)
+        plt.legend(pod_artists, self.labels)
+
         frames = self.__get_frames(max_frames, max_laps)
+
+        progress = IntProgress(min=0, max=len(frames))
+        display(progress)
 
         def do_animate(framedata):
             for (idx, frame) in framedata:
@@ -123,30 +158,37 @@ class Drawer:
                 pod_artists[idx].set_theta2(theta2)
                 pod_artists[idx]._recompute_path() # pylint: disable=protected-access
                 back_artists[check_id + 1].set_color((1, 0, 0))
+            progress.value += 1
             return pod_artists
 
         anim = FuncAnimation(plt.gcf(), do_animate, init_func = draw_background, interval = 300, frames = frames, blit = True)
-        plt.legend(pod_artists, [
-            "Player {} ({})".format(p, type(self.players[p].controller).__name__)
-            for p in range(len(self.players))
-        ])
         plt.close(self.fig)
         anim.save(filename, writer = PillowWriter(fps=10))
         return Image(filename = filename)
 
 
-    def chart_rewards(self, max_frames: int = 100):
+    def chart_rewards(self,
+                      reward_func: Callable[[PodBoard, PodState, PodState], float],
+                      max_frames: int = 100,
+                      reset: bool = True):
         """
         Display a graph of the rewards for each player at each turn
         """
+        if reset:
+            for p in self.players:
+                p.reset()
+
         for (idx, player) in enumerate(self.players):
-            rewards = [dense_reward(player.pod, self.board)]
+            rewards = []
+
             for frame in range(max_frames):
-                player.step(self.board)
-                rewards.append(dense_reward(player.pod, self.board))
+                old_pod = player.pod.clone()
+                player.step()
+                rewards.append(reward_func(self.board, old_pod, player.pod))
+
             plt.plot(rewards,
-                     color=gen_color(idx),
-                     label="Player {} ({})".format(idx, type(player.controller).__name__))
+                     color=_gen_color(idx),
+                     label=self.labels[idx])
 
         plt.legend(loc="upper left")
         plt.ylabel('Reward')
