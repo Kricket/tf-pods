@@ -56,6 +56,17 @@ class PodState:
     def __str__(self):
         return "PodState[pos=%s vel=%s angle=%.3f laps=%d]" % (self.pos, self.vel, self.angle, self.laps)
 
+    def __eq__(self, other):
+        if not isinstance(other, PodState):
+            return False
+        # NOTE: we ignore laps and turns here!
+        if self.pos == other.pos:
+            if self.vel == other.vel:
+                if self.angle == other.angle:
+                    if self.nextCheckId == other.nextCheckId:
+                        return True
+        return False
+
     def serialize(self):
         return [
             self.pos,

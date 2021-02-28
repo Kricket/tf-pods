@@ -15,6 +15,9 @@ from pod.util import PodState, clean_angle
 def make_reward(
         factors: List[Tuple[float, Callable[[PodBoard, PodState, PodState], float]]]
 ) -> Callable[[PodBoard, PodState, PodState], float]:
+    """
+    Generate a reward function which is a linear combination of other reward functions
+    """
     def rfunc(board: PodBoard, prev_pod: PodState, pod: PodState):
         total = 0.0
         for (factor, func) in factors:

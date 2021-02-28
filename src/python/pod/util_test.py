@@ -38,3 +38,18 @@ class UtilTest(TestCase):
         self.assertEqual(pod.laps, copy.laps)
         self.assertEqual(pod.vel, copy.vel)
         self.assertEqual(pod.nextCheckId, copy.nextCheckId)
+
+    def test_PodState_equals_initial(self):
+        p1 = PodState()
+        p2 = PodState()
+        self.assertEqual(p1, p2)
+
+    def test_PodState_equals_not_initial(self):
+        p1 = PodState(pos = Vec2(1, 2), angle = 1.23, vel = Vec2(3, 4), next_check_id = 5)
+        p2 = PodState(pos = Vec2(1, 2), angle = 1.23, vel = Vec2(3, 4), next_check_id = 5)
+        self.assertEqual(p1, p2)
+
+    def test_PodState_equals_fails_initial(self):
+        p1 = PodState(pos=Vec2(0, 1))
+        p2 = PodState(pos=Vec2(1, 1))
+        self.assertNotEqual(p1, p2)
