@@ -22,7 +22,7 @@ class PlayOutput:
 
 class PodBoard:
     @staticmethod
-    def circle(num_points: int = 3, radius: float = 4000):
+    def circle(num_points: int = 3, radius: float = 4000) -> 'PodBoard':
         """
         Generate a PodBoard with checkpoints arranged in a circle around the
         center of the board
@@ -33,31 +33,32 @@ class PodBoard:
         checks = [center + v.rotate(i * angle_diff) for i in range(num_points)]
         return PodBoard(checks)
 
+
     @staticmethod
-    def ladder(rungs: int = 3, width: int = 8000, rung_dist: int = 2000):
+    def grid(rows: int = 3, cols: int = 3, spacing: int = 3000) -> 'PodBoard':
         """
-        Generate a PodBoard with checks in "ladder" form:
-        1  2
-        3  4
-        5  6
+        Generate a board with checks in grid form:
+        1 2 3
+        4 5 6
+        7 8 9
         """
         checks = []
 
         x_center = Constants.world_x() / 2
         y_center = Constants.world_y() / 2
 
-        # X-dist from center to any rung
-        x_off = width / 2
-
-        # 5 rungs: -2, -1, 0, 1, 2
-        # 4 rungs: -1.5, -0.5, 0.5, 1.5
-        # 3 rungs: -1, 0, 1
+        # 5 rows: -2, -1, 0, 1, 2
+        # 4 rows: -1.5, -0.5, 0.5, 1.5
+        # 3 rows: -1, 0, 1
         # => start at -(r-1)/2
-        start = (1 - rungs)/2
-        for rung in range(rungs):
-            y_off = (start + rung) * rung_dist
-            checks.append(Vec2(x_center - x_off, y_center + y_off))
-            checks.append(Vec2(x_center + x_off, y_center + y_off))
+        row_start = (1 - rows)/2
+        col_start = (1 - cols)/2
+
+        for row in range(rows):
+            y_off = (row_start + row) * spacing
+            for col in range(cols):
+                x_off = (col_start + col) * spacing
+                checks.append(Vec2(x_center + x_off, y_center + y_off))
 
         return PodBoard(checks)
 

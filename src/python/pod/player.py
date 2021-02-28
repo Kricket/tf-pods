@@ -19,6 +19,8 @@ class Player:
         else:
             self.pod = pod
 
+        self.initial_state = self.pod.clone()
+
     def __str__(self):
         return "Player[controller=%s pod=%s]" % (type(self.controller), self.pod)
 
@@ -32,9 +34,4 @@ class Player:
         """
         Reset: put the pod at the start position with 0 turns/laps
         """
-        self.pod.pos = self.controller.board.checkpoints[-1]
-        self.pod.vel = ORIGIN
-        self.pod.angle = 0
-        self.pod.nextCheckId = 0
-        self.pod.laps = 0
-        self.pod.turns = 0
+        self.pod = self.initial_state.clone()

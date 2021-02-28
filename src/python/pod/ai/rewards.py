@@ -29,8 +29,10 @@ def make_reward(
 
 def dist_reward(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
     """
-    Dense reward based on the distance to the next checkpoint, scaled to be in (0, 1)
-    Problem with this is that the difference is very slight.
+    Dense reward based on the distance to the next checkpoint, scaled to be in (0, 1).
+
+    In general, the difference in output between two consecutive turns is very slight.
+    In addition, hitting a check produces a big PENALTY, since the distance suddenly increases!
     """
     pod_to_check = board.checkpoints[pod.nextCheckId] - pod.pos
 
@@ -60,11 +62,14 @@ def check_reward(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
 
 def diff_reward(board: PodBoard, prev_pod: PodState, next_pod: PodState) -> float:
     """
-    Dense reward based on the change in distance to the next check, scaled to be in (0, 1)
+    Dense reward based on the change in distance to the next check, scaled to be in (-1, 1).
+
+    This should be used with the check_reward, since it doesn't know what to do when
+      the pod hits a check.
     """
     if prev_pod.nextCheckId != next_pod.nextCheckId:
-        # Distance would make no sense here, so instead just give a big bonus
-        return 5
+        # Distance would make no sense here.
+        return 0
 
     check = board.checkpoints[prev_pod.nextCheckId]
     prev_dist = (check - prev_pod.pos).length()
@@ -74,7 +79,9 @@ def diff_reward(board: PodBoard, prev_pod: PodState, next_pod: PodState) -> floa
 
 def speed_reward(board: PodBoard, prev_pod: PodState, next_pod: PodState) -> float:
     """
-    Indicates how much the speed is taking us toward the next check (scaled)
+    Indicates how much the speed is taking us toward the next check (scaled).
+
+    Similar to the diff reward, although the score
     """
     pod_to_check = board.checkpoints[next_pod.nextCheckId] - next_pod.pos
     dist_to_check = pod_to_check.length()

@@ -33,6 +33,8 @@ def _gen_color(seed: int) -> Tuple[float, float, float]:
 def _gen_label(idx: int, player: Player) -> str:
     return "Player {} ({})".format(idx, type(player.controller).__name__)
 
+def _gen_labels(players: List[Player]) -> List[str]:
+    return [_gen_label(idx, player) for (idx, player) in enumerate(players)]
 
 class Drawer:
     def __init__(self,
@@ -49,18 +51,26 @@ class Drawer:
             raise ValueError('Must provide either players or controllers')
         
         if labels is None:
-            labels = [_gen_label(idx, player) for (idx, player) in enumerate(self.players)]
+            labels = _gen_labels(self.players)
         elif len(labels) < len(self.players):
             for idx in range(len(labels), len(self.players)):
                 labels.append(_gen_label(idx, self.players[idx]))
         self.labels = labels
 
-    def __prepare(self):
+    def __prepare_size(self):
         plt.rcParams['figure.figsize'] = [Constants.world_x() / 1000, Constants.world_y() / 1000]
         plt.rcParams['figure.dpi'] = 100
+
+    def __prepare_for_world(self):
+        self.__prepare_size()
         self.fig = plt.figure()
         self.ax = plt.axes(xlim=(-PADDING, Constants.world_x() + PADDING), ylim=(-PADDING, Constants.world_y() + PADDING))
         self.ax.invert_yaxis()
+
+    def __reset_if(self, do_it: bool):
+        if do_it:
+            for p in self.players:
+                p.reset()
 
     def __draw_check(self, check: Vec2, idx: int) -> Circle:
         self.ax.annotate(str(idx), xy=(check.x, check.y), fontsize=20, ha="center")
@@ -89,7 +99,7 @@ class Drawer:
         """
         Draw a single frame of the game in its current state (board, players)
         """
-        self.__prepare()
+        self.__prepare_for_world()
 
         self.ax.add_artist(self.__get_field_artist())
 
@@ -116,19 +126,22 @@ class Drawer:
         return frames
 
 
-    def animate(self, max_frames: int = 200, max_laps: int = 5, filename = '/tmp/pods.gif', reset: bool = True):
+    def animate(self,
+                max_frames: int = 200,
+                max_laps: int = 5,
+                filename = '/tmp/pods.gif',
+                reset: bool = True,
+                fps: int = 10):
         """
         Generate an animated GIF of the players running through the game
         :param max_frames Max number of turns to play
         :param max_laps Max number of laps for any player
         :param filename Where to store the generated file
         :param reset Whether to reset the state of each Player first
+        :param fps Frames per second
         """
-        if reset:
-            for p in self.players:
-                p.reset()
-
-        self.__prepare()
+        self.__reset_if(reset)
+        self.__prepare_for_world()
 
         back_artists = []
         def draw_background():
@@ -161,9 +174,15 @@ class Drawer:
             progress.value += 1
             return pod_artists
 
-        anim = FuncAnimation(plt.gcf(), do_animate, init_func = draw_background, interval = 300, frames = frames, blit = True)
+        anim = FuncAnimation(
+            plt.gcf(),
+            do_animate,
+            init_func = draw_background,
+            frames = frames,
+            blit = True
+        )
         plt.close(self.fig)
-        anim.save(filename, writer = PillowWriter(fps=10))
+        anim.save(filename, writer = PillowWriter(fps=fps))
         return Image(filename = filename)
 
 
@@ -174,9 +193,8 @@ class Drawer:
         """
         Display a graph of the rewards for each player at each turn
         """
-        if reset:
-            for p in self.players:
-                p.reset()
+        self.__reset_if(reset)
+        self.__prepare_size()
 
         for (idx, player) in enumerate(self.players):
             rewards = []
@@ -195,3 +213,56 @@ class Drawer:
         plt.xlabel('Turns')
         plt.grid(axis='y')
         plt.show()
+
+    def compare_rewards(self,
+                        rewards: List[Tuple[str, Callable[[PodBoard, PodState, PodState], float]]],
+                        players: List[Player] = None,
+                        p_labels: List[str] = None,
+                        max_frames: int = 100):
+        self.__prepare_size()
+
+        if players is None:
+            players = self.players
+        if p_labels is None:
+            p_labels = _gen_labels(players)
+
+        ticks = []
+        tick_labels = []
+        tick_colors = []
+        for step in range(0, max_frames, math.floor(max_frames / 10)):
+            ticks.append(step)
+            tick_labels.append(str(step))
+            tick_colors.append('black')
+
+        for (p_idx, player) in enumerate(players):
+            player.reset()
+            reward_values = [[] for _ in rewards]
+
+            for frame in range(max_frames):
+                old_pod = player.pod.clone()
+                player.step()
+
+                for (r_idx, r_tup) in enumerate(rewards):
+                    r_label, r_func = r_tup
+                    reward_values[r_idx].append(r_func(self.board, old_pod, player.pod))
+
+                if old_pod.nextCheckId != player.pod.nextCheckId:
+                    ticks.append(frame)
+                    tick_labels.append("Check {}".format(old_pod.nextCheckId))
+                    tick_colors.append('#0FDD0F')
+
+            for (r_idx, values) in enumerate(reward_values):
+                player_color = _gen_color(r_idx * len(players) + p_idx)
+                plt.plot(values,
+                         color=player_color,
+                         label="{} - {}".format(p_labels[p_idx], rewards[r_idx][0]))
+
+        plt.legend(loc="lower right")
+        plt.ylabel('Reward')
+        plt.xlabel('Turns')
+        locs, labels = plt.xticks(ticks=ticks, labels=tick_labels, rotation=60)
+        for (i, lab) in enumerate(labels):
+            lab.set_color(tick_colors[i])
+        plt.grid()
+        plt.show()
+
