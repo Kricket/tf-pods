@@ -31,12 +31,17 @@ def regood(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
     pod_to_check = board.checkpoints[pod.nextCheckId] - pod.pos
     prev_to_check = board.checkpoints[pod.nextCheckId] - board.get_check(pod.nextCheckId-1)
 
-    # This scales, not by a fixed MAX_DIST, but relative to the distance between the checks
+    # This scales, not by a fixed MAX_DIST, but relative to the distance between the checks.
+    # So right after hitting a check, this should be about 1 (slightly off since we hit the
+    # edge of the check, not the center)
     dist_penalty = math.sqrt(pod_to_check.square_length() / prev_to_check.square_length())
 
+    # Bonus for each check hit. By making it 2 per check, we ensure that the reward is always
+    # higher after hitting a check. (If left at 1, the dist_penalty could be slightly greater
+    # than 1, leading to a DECREASE in reward for hitting a check)
     checks_hit = len(board.checkpoints) * pod.laps + pod.nextCheckId
 
-    return checks_hit + 1 - dist_penalty
+    return 2 * checks_hit + 1 - dist_penalty
 
 
 #################################################

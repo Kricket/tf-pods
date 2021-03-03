@@ -6,27 +6,12 @@ import tensorflow as tf
 
 import numpy as np
 from pod.ai.action_discretizer import ActionDiscretizer
-from pod.ai.ai_utils import MAX_DIST
+from pod.ai.vectorizer import Vectorizer, V6
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import Controller, PlayOutput
 from pod.util import PodState
 from vec2 import UNIT
-
-# Size of the vector returned by state_to_vector
-STATE_VECTOR_LEN = 6
-
-def state_to_vector(pod: PodState, board: PodBoard) -> List[float]:
-    """
-    Convert a PodState to an input vector that can be used for the neural network
-    """
-    # Velocity is already relative to the pod, so it just needs to be rotated
-    vel = pod.vel.rotate(-pod.angle) / Constants.max_vel()
-
-    check1 = (board.get_check(pod.nextCheckId) - pod.pos).rotate(-pod.angle) / MAX_DIST
-    check2 = (board.get_check(pod.nextCheckId + 1) - pod.pos).rotate(-pod.angle) / MAX_DIST
-
-    return [vel.x, vel.y, check1.x, check1.y, check2.x, check2.y]
 
 
 class ReplayBuffer:
@@ -57,17 +42,19 @@ class DeepQController(Controller):
     def __init__(self,
                  board: PodBoard,
                  reward_func: Callable[[PodBoard, PodState, PodState], float],
-                 discretizer: ActionDiscretizer = ActionDiscretizer(3, 3)):
+                 discretizer: ActionDiscretizer = ActionDiscretizer(3, 3),
+                 vectorizer: Vectorizer = V6()):
         super().__init__(board)
 
         self.reward_func = reward_func
         self.ad = discretizer
         self.replay = ReplayBuffer()
+        self.vectorizer = vectorizer
 
         self.model = tf.keras.Sequential([
             tf.keras.layers.Dense(
                 32,
-                input_shape=(STATE_VECTOR_LEN,),
+                input_shape=(self.vectorizer.vec_len(),),
                 kernel_initializer="zeros",
                 activation="sigmoid",
             ),
@@ -91,7 +78,7 @@ class DeepQController(Controller):
         Get the output of the model for the given input state
         """
         if state_vec is None:
-            state_vec = state_to_vector(pod, self.board)
+            state_vec = self.vectorizer.to_vector(self.board, pod)
         return self.model(tf.constant([state_vec]))
 
     def __get_best_action(self, pod: PodState = None, state_vec = None):
@@ -110,7 +97,7 @@ class DeepQController(Controller):
             pos=self.board.get_check(0) + pos_offset,
             angle=2 * math.pi * random.random() - math.pi
         )
-        state = state_to_vector(pod, self.board)
+        state = self.vectorizer.to_vector(self.board, pod)
         return pod, state
 
     def __choose_action(self, state, prob_rand: float) -> int:
@@ -129,7 +116,7 @@ class DeepQController(Controller):
         next_pod = self.board.step(pod, self.ad.action_to_output(action, pod.angle, pod.pos), PodState())
         reward = self.reward_func(self.board, pod, next_pod)
 
-        return next_pod, state_to_vector(next_pod, self.board), reward
+        return next_pod, self.vectorizer.to_vector(self.board, next_pod), reward
 
     def __run_episode(self, prob_rand_action: float, max_turns: int = 50):
         total_reward = 0
@@ -213,7 +200,7 @@ class DeepQController(Controller):
                             future_discount: float = 0.7,
                             ):
         print("Building states for each pod...")
-        pod_states = [state_to_vector(pod, self.board) for pod in pods]
+        pod_states = [self.vectorizer.to_vector(self.board, pod) for pod in pods]
 
         self.replay.capacity = len(pods)
 

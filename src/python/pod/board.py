@@ -62,6 +62,21 @@ class PodBoard:
 
         return PodBoard(checks)
 
+    @staticmethod
+    def trainer(num_checks: int = 3) -> 'PodBoard':
+        """
+        Generate a board with the given number of checks.
+        They are all in a row, but at varying distances.
+        The goal is to use it with gen_pods to generate test data with varying distances to the next check.
+        """
+        checks = [Vec2(Constants.check_radius() * ((i+1)**2), Constants.world_y() / 2)
+                  for i in range(num_checks)]
+
+        # Shift the checks to center them
+        width = checks[-1].x - checks[0].x
+        x_start = (Constants.world_x() - width) / 2 - checks[0].x
+
+        return PodBoard([check + Vec2(x_start, 0)  for check in checks])
 
     def __init__(self, checks: List[Vec2] = None):
         if checks is None:
