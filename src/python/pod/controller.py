@@ -1,3 +1,5 @@
+from typing import Dict
+
 from pod.board import PodBoard, PlayOutput
 from pod.util import PodState
 
@@ -20,6 +22,18 @@ class Controller:
         Get the play that this Controller will make
         """
         return PlayOutput()
+
+    def reset(self):
+        """
+        Do anything that needs to be done to reset the internal state
+        """
+        pass
+
+    def record(self, log: Dict):
+        """
+        Save data about the current state of this Controller for future use
+        """
+        pass
 
 
 class SimpleController(Controller):

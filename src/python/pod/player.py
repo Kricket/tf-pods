@@ -1,6 +1,7 @@
+from typing import Dict
+
 from pod.controller import Controller
 from pod.util import PodState
-from vec2 import ORIGIN
 
 
 class Player:
@@ -35,3 +36,9 @@ class Player:
         Reset: put the pod at the start position with 0 turns/laps
         """
         self.pod = self.initial_state.clone()
+        self.controller.reset()
+
+    def record(self) -> Dict:
+        log = {'pod': self.pod.clone()}
+        self.controller.record(log)
+        return log

@@ -86,11 +86,19 @@ class PodBoard:
             if not too_close:
                 self.checkpoints.append(check)
 
-    def shuffle(self):
+    def shuffle(self) -> 'PodBoard':
         """
         Randomize the order of the checks
         """
         random.shuffle(self.checkpoints)
+        return self
+
+    def reorder(self, order: List[int]) -> 'PodBoard':
+        """
+        Put the existing checks into the given order
+        """
+        checks = [self.checkpoints[i] for i in order]
+        self.checkpoints = checks
         return self
 
     def get_check(self, check_id: int):

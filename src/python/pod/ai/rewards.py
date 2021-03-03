@@ -12,6 +12,37 @@ from pod.util import PodState, clean_angle
 #################################################
 
 
+def pgr(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
+    """
+    Pretty Good Reward
+    Attempts to estimate the distance without using a SQRT calculation.
+    """
+    pod_to_check = board.checkpoints[pod.nextCheckId] - pod.pos
+    prev_to_next_check = board.checkpoints[pod.nextCheckId] - board.get_check(pod.nextCheckId - 1)
+    pod_dist_estimate = (math.fabs(pod_to_check.x) + math.fabs(pod_to_check.y)) / 2
+    check_dist_estimate = (math.fabs(prev_to_next_check.x) + math.fabs(prev_to_next_check.y)) / 2
+    dist_estimate = pod_dist_estimate / check_dist_estimate
+
+    checks_hit = len(board.checkpoints) * pod.laps + pod.nextCheckId
+
+    return 2*checks_hit - dist_estimate + 1
+
+def regood(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
+    pod_to_check = board.checkpoints[pod.nextCheckId] - pod.pos
+    prev_to_check = board.checkpoints[pod.nextCheckId] - board.get_check(pod.nextCheckId-1)
+
+    # This scales, not by a fixed MAX_DIST, but relative to the distance between the checks
+    dist_penalty = math.sqrt(pod_to_check.square_length() / prev_to_check.square_length())
+
+    checks_hit = len(board.checkpoints) * pod.laps + pod.nextCheckId
+
+    return checks_hit + 1 - dist_penalty
+
+
+#################################################
+# These are for experimenting...
+#################################################
+
 def make_reward(
         factors: List[Tuple[float, Callable[[PodBoard, PodState, PodState], float]]]
 ) -> Callable[[PodBoard, PodState, PodState], float]:
@@ -89,4 +120,3 @@ def speed_reward(board: PodBoard, prev_pod: PodState, next_pod: PodState) -> flo
     # a*b = |a|*|b|*cos
     # Thus, vel*check / dist = how much the vel is taking us toward the check
     return (next_pod.vel * pod_to_check) / (dist_to_check * Constants.max_vel())
-
