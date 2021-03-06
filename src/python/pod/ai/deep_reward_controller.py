@@ -57,8 +57,11 @@ class DeepRewardController(DeepController):
         return result
 
     def train(self, pods: List[PodState], epochs: int = 10):
+        print("Generating states...")
         states = np.array([self.vectorizer.to_vector(self.board, p) for p in pods])
+        print("Generating labels...")
         labels = np.array([self.ad.get_best_action(self.board, pod, self.reward_func) for pod in pods])
+        print("Training...")
         return self.model.fit(states, labels, epochs=epochs, callbacks=[
             tf.keras.callbacks.ReduceLROnPlateau(monitor="accuracy", factor=0.5, patience=5, min_delta=0.001)
         ])

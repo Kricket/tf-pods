@@ -35,7 +35,7 @@ class PodBoard:
 
 
     @staticmethod
-    def grid(rows: int = 3, cols: int = 3, spacing: int = 3000) -> 'PodBoard':
+    def grid(rows: int = 3, cols: int = 3, x_spacing: int = 4000, y_spacing: int = 3000) -> 'PodBoard':
         """
         Generate a board with checks in grid form:
         1 2 3
@@ -55,9 +55,9 @@ class PodBoard:
         col_start = (1 - cols)/2
 
         for row in range(rows):
-            y_off = (row_start + row) * spacing
+            y_off = (row_start + row) * y_spacing
             for col in range(cols):
-                x_off = (col_start + col) * spacing
+                x_off = (col_start + col) * x_spacing
                 checks.append(Vec2(x_center + x_off, y_center + y_off))
 
         return PodBoard(checks)

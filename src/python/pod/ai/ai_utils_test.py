@@ -2,23 +2,30 @@ import math
 from unittest import TestCase
 
 from pod.ai.ai_utils import gen_pods
-from vec2 import Vec2, ORIGIN, UNIT
+from pod.util import PodState
+from vec2 import Vec2
 
 
 class AIUtilsTest(TestCase):
     def test_gen_pods(self):
+        check = Vec2(10, 20)
         pods = gen_pods(
-            ORIGIN,
-            [1],
+            [check],
+            # One to the left, one to the right of the check
+            [0, math.pi],
             [1.0],
+            # Always pointing at the check
             [0.0],
-            [1.0])
+            # One to the left, one to the right of the pod's heading (so +/- y)
+            [math.pi / 2, 3 * math.pi / 2],
+            [2.0])
 
-        self.assertEqual(len(pods), 1)
+        for pod in [
+            PodState(pos=check + Vec2(1, 0), vel=Vec2(0,  2), angle=math.pi, next_check_id=0),
+            PodState(pos=check + Vec2(1, 0), vel=Vec2(0, -2), angle=math.pi, next_check_id=0),
+            PodState(pos=check - Vec2(1, 0), vel=Vec2(0,  2), angle=0, next_check_id=0),
+            PodState(pos=check - Vec2(1, 0), vel=Vec2(0, -2), angle=0, next_check_id=0)
+        ]:
+            self.assertIn(pod, pods, "{} not found in {}".format(pod, [str(p) for p in pods]))
 
-        pod = pods[0]
-        self.assertEqual(pod.pos, Vec2(1, 1))
-        self.assertAlmostEqual(pod.angle, -.75 * math.pi + 1)
-
-        expected_vel = UNIT.rotate(-.75 * math.pi)
-        self.assertEqual(pod.vel, expected_vel, "{} should be {}".format(pod.vel,expected_vel))
+        self.assertEqual(len(pods), 4)

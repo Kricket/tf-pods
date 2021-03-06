@@ -1,7 +1,8 @@
 import math
+from random import random
 
 from pod.constants import Constants
-from vec2 import Vec2, ORIGIN
+from vec2 import Vec2, ORIGIN, UNIT
 
 
 def within(value: float, mini: float, maxi: float) -> float:
@@ -42,10 +43,22 @@ def legal_angle(req_angle: float, pod_angle: float) -> float:
 
 
 class PodState:
+    @staticmethod
+    def random() -> 'PodState':
+        return PodState(
+            pos = Vec2.random(Constants.world_x(), Constants.world_y()),
+            vel = UNIT.rotate(2 * math.pi * random()) * (random() * Constants.max_vel()),
+            angle = 2 * math.pi * random()
+        )
+
     """
     The full internal state of a pod
     """
-    def __init__(self, pos: Vec2 = ORIGIN, vel: Vec2 = ORIGIN, angle: float = 0.0, next_check_id: int = 0):
+    def __init__(self,
+                 pos: Vec2 = ORIGIN,
+                 vel: Vec2 = ORIGIN,
+                 angle: float = 0.0,
+                 next_check_id: int = 0):
         self.pos = pos
         self.vel = vel
         self.angle = angle
@@ -54,7 +67,7 @@ class PodState:
         self.turns = 0
 
     def __str__(self):
-        return "PodState[pos=%s vel=%s angle=%.3f laps=%d]" % (self.pos, self.vel, self.angle, self.laps)
+        return "PodState[pos=%s vel=%s angle=%.3f next=%d]" % (self.pos, self.vel, self.angle, self.nextCheckId)
 
     def __eq__(self, other):
         if not isinstance(other, PodState):
@@ -66,6 +79,9 @@ class PodState:
                     if self.nextCheckId == other.nextCheckId:
                         return True
         return False
+
+    def __hash__(self):
+        return self.pos.__hash__() + self.vel.__hash__() + self.angle.__hash__() + self.nextCheckId.__hash__()
 
     def serialize(self):
         return [

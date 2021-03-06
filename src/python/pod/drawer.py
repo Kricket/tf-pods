@@ -1,11 +1,12 @@
+from pathlib import Path
 from typing import List, Tuple, Callable, Dict
 
 import matplotlib.pyplot as plt
 import math
 
-from matplotlib.animation import FuncAnimation, PillowWriter
+from matplotlib.animation import FuncAnimation, PillowWriter, HTMLWriter
 from matplotlib.patches import Circle, Wedge, Rectangle
-from IPython.display import Image, display
+from IPython.display import Image, display, HTML
 from ipywidgets import widgets
 
 from pod.constants import Constants
@@ -20,7 +21,30 @@ from vec2 import Vec2
 PADDING = 3000
 
 
-def _pod_wedge_info(pod: PodState) -> Tuple[float, float, float]:
+def _prepare_size():
+    plt.rcParams['figure.figsize'] = [Constants.world_x() / 1000, Constants.world_y() / 1000]
+    plt.rcParams['figure.dpi'] = 100
+
+
+def _get_field_artist() -> Rectangle:
+    """
+    Get an artist to draw the board
+    """
+    return Rectangle(
+        (0, 0),
+        Constants.world_x(), Constants.world_y(),
+        ec="black", fc="white")
+
+
+def _get_pod_artist(pod: PodState, color: Tuple[float, float, float]) -> Wedge:
+    # Draw the wedge
+    theta1, theta2, center = _pod_wedge_info(pod)
+    wedge = Wedge((center.x, center.y), Constants.pod_radius(), theta1, theta2, color = color)
+    wedge.set_zorder(10)
+    return wedge
+
+
+def _pod_wedge_info(pod: PodState) -> Tuple[float, float, Vec2]:
     """
     Get info for drawing a wedge for ta pod:
     angle from, angle to, center
@@ -44,8 +68,10 @@ def _gen_color(seed: int) -> Tuple[float, float, float]:
 def _gen_label(idx: int, player: Player) -> str:
     return "Player {} ({})".format(idx, type(player.controller).__name__)
 
+
 def _gen_labels(players: List[Player]) -> List[str]:
     return [_gen_label(idx, player) for (idx, player) in enumerate(players)]
+
 
 class Drawer:
     def __init__(self,
@@ -91,12 +117,8 @@ class Drawer:
                 turnlog.append(p.record())
             self.log.append(turnlog)
 
-    def __prepare_size(self):
-        plt.rcParams['figure.figsize'] = [Constants.world_x() / 1000, Constants.world_y() / 1000]
-        plt.rcParams['figure.dpi'] = 100
-
     def __prepare_for_world(self):
-        self.__prepare_size()
+        _prepare_size()
         self.fig = plt.figure()
         self.ax = plt.axes(xlim=(-PADDING, Constants.world_x() + PADDING), ylim=(-PADDING, Constants.world_y() + PADDING))
         self.ax.invert_yaxis()
@@ -110,26 +132,13 @@ class Drawer:
         self.ax.annotate(str(idx), xy=(check.x, check.y), fontsize=20, ha="center")
         return Circle((check.x, check.y), Constants.check_radius())
 
-    def __get_pod_artist(self, pod: PodState, color: Tuple[float, float, float]) -> Wedge:
-        # Draw the wedge
-        theta1, theta2, center = _pod_wedge_info(pod)
-        wedge = Wedge((center.x, center.y), Constants.pod_radius(), theta1, theta2, color = color)
-        wedge.set_zorder(10)
-        return wedge
-
-    def __get_field_artist(self) -> Rectangle:
-        return Rectangle(
-            (0, 0),
-            Constants.world_x(), Constants.world_y(),
-            ec="black", fc="white")
-
     def draw_frame(self, pods = None):
         """
         Draw a single frame of the game in its current state (board, players)
         """
         self.__prepare_for_world()
 
-        self.ax.add_artist(self.__get_field_artist())
+        self.ax.add_artist(_get_field_artist())
 
         for (idx, check) in enumerate(self.board.checkpoints):
             circle = self.__draw_check(check, idx)
@@ -137,10 +146,10 @@ class Drawer:
 
         if pods is None:
             for (idx, player) in enumerate(self.players):
-                self.ax.add_artist(self.__get_pod_artist(player.pod, _gen_color(idx)))
+                self.ax.add_artist(_get_pod_artist(player.pod, _gen_color(idx)))
         else:
             for (idx, pod) in enumerate(pods):
-                self.ax.add_artist(self.__get_pod_artist(pod, _gen_color(idx)))
+                self.ax.add_artist(_get_pod_artist(pod, _gen_color(idx)))
 
         plt.show()
 
@@ -160,11 +169,13 @@ class Drawer:
     def animate(self,
                 max_frames: int = 200,
                 max_laps: int = 5,
-                filename = '/tmp/pods.gif',
+                as_gif = False,
+                filename = '/tmp/pods',
                 reset: bool = True,
                 fps: int = 10):
         """
         Generate an animated GIF of the players running through the game
+        :param as_gif If True, generate a GIF, otherwise an HTML animation
         :param max_frames Max number of turns to play
         :param max_laps Max number of laps for any player
         :param filename Where to store the generated file
@@ -177,7 +188,7 @@ class Drawer:
 
         back_artists = []
         def draw_background():
-            back_artists.append(self.__get_field_artist())
+            back_artists.append(_get_field_artist())
             for (idx, check) in enumerate(self.board.checkpoints):
                 back_artists.append(self.__draw_check(check, idx))
 
@@ -187,7 +198,7 @@ class Drawer:
             return back_artists
 
         pod_artists = [
-            self.__get_pod_artist(p.pod, _gen_color(idx))
+            _get_pod_artist(p.pod, _gen_color(idx))
             for (idx, p) in enumerate(self.players)
         ]
         for a in pod_artists: self.ax.add_artist(a)
@@ -207,7 +218,6 @@ class Drawer:
                 pod_artists[idx].set_theta1(theta1)
                 pod_artists[idx].set_theta2(theta2)
                 pod_artists[idx]._recompute_path() # pylint: disable=protected-access
-                back_artists[pod.nextCheckId + 1].set_color((1, 0, 0))
             return pod_artists
 
         anim = FuncAnimation(
@@ -218,8 +228,17 @@ class Drawer:
             blit = True
         )
         plt.close(self.fig)
-        anim.save(filename, writer = PillowWriter(fps=fps))
-        return Image(filename = filename)
+
+        anim.to_jshtml()
+        if as_gif:
+            if not filename.endswith(".gif"): filename = filename + ".gif"
+            anim.save(filename, writer=PillowWriter(fps=fps))
+            return Image(filename=filename)
+        else:
+            if not filename.endswith(".html"): filename = filename + ".html"
+            anim.save(filename, writer=HTMLWriter(fps=fps, embed_frames=True, default_mode='loop'))
+            path = Path(filename)
+            return HTML(path.read_text())
 
 
     def chart_rewards(self, reward_func: Callable[[PodBoard, PodState, PodState], float]):
@@ -227,7 +246,7 @@ class Drawer:
         Display a graph of the rewards for each player at each turn
         """
         if self.log is None: self.record()
-        self.__prepare_size()
+        _prepare_size()
 
 
         for (player_idx, player) in enumerate(self.players):
@@ -261,7 +280,7 @@ class Drawer:
             players = [i for i in range(len(self.players))]
 
         if self.log is None: self.record()
-        self.__prepare_size()
+        _prepare_size()
 
         ticks = []
         tick_labels = []

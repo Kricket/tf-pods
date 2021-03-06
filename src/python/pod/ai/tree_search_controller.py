@@ -1,4 +1,4 @@
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Dict
 
 from pod.ai.action_discretizer import ActionDiscretizer
 from pod.board import PodBoard, PlayOutput
@@ -70,7 +70,7 @@ class TreeSearchController(Controller):
         self.max_depth = max_depth
         self.reward_func = reward_func
         self.root = None
-        self.check_turns = []
+        self.last_action = None
 
     def reset(self):
         self.root = None
@@ -82,9 +82,12 @@ class TreeSearchController(Controller):
         self.root.expand(self.max_depth)
 
         action, node = self.root.best_child()
-        if self.root.pod.nextCheckId != node.pod.nextCheckId:
-            self.check_turns.append(node.pod.turns)
 
         self.root = node
+        self.last_action = action
 
         return self.ad.action_to_output(action, pod.angle, pod.pos)
+
+    def record(self, log: Dict):
+        super().record(log)
+        log['action'] = self.last_action

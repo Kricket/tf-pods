@@ -1,4 +1,5 @@
 import math
+from random import random
 
 EPSILON = 0.00001
 
@@ -100,6 +101,13 @@ class Vec2(object):
         if atan < 0: atan += 2.0 * math.pi
 
         return atan
+
+    @staticmethod
+    def random(max_x: float, max_y: float) -> 'Vec2':
+        return Vec2(random() * (max_x + 1), random() * (max_y + 1))
+
+    def __hash__(self):
+        return self.x.__hash__() + self.y.__hash__()
 
 
 ORIGIN = Vec2(0, 0)
