@@ -229,7 +229,6 @@ class Drawer:
         )
         plt.close(self.fig)
 
-        anim.to_jshtml()
         if as_gif:
             if not filename.endswith(".gif"): filename = filename + ".gif"
             anim.save(filename, writer=PillowWriter(fps=fps))
