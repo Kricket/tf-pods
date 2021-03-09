@@ -41,7 +41,8 @@ def _build_labels(tid: str,
     model = tf.keras.models.load_model(model_path)
     controller = DeepController(board, V6(), ad)
     controller.model = model
-    r_func = _wrap_reward_func(controller, depth, orig_rfunc)
+
+    r_func = _wrap_reward_func(controller, depth, orig_rfunc) if depth > 0 else orig_rfunc
 
     count = 0
     labels = []
@@ -66,32 +67,37 @@ class DeepTreeController(DeepController):
         self.depth = 0
 
         if model is None:
-            self.model = tf.keras.Sequential([
-                tf.keras.layers.Dense(
-                    48,
-                    input_shape=(self.vectorizer.vec_len(),),
-                    activation="sigmoid",
-                ),
-                tf.keras.layers.Dense(
-                    32,
-                    activation="sigmoid",
-                ),
-                tf.keras.layers.Dense(
-                    24,
-                    activation="sigmoid",
-                ),
-                tf.keras.layers.Dense(
-                    self.ad.num_actions,
-                ),
-            ])
+            self.model = self.__build_model()
         else:
             self.model = model
 
-        self.model.compile(
+    def __build_model(self):
+        model = tf.keras.Sequential([
+            tf.keras.layers.Dense(
+                48,
+                input_shape=(self.vectorizer.vec_len(),),
+                activation="sigmoid",
+            ),
+            tf.keras.layers.Dense(
+                32,
+                activation="sigmoid",
+            ),
+            tf.keras.layers.Dense(
+                24,
+                activation="sigmoid",
+            ),
+            tf.keras.layers.Dense(
+                self.ad.num_actions,
+            ),
+        ])
+
+        model.compile(
             optimizer=tf.optimizers.Adam(0.001),
             metrics=['accuracy'],
             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
         )
+
+        return model
 
     def __build_labels(self, pods: List[Tuple[PodState, List[float]]], n_proc: int = 3) -> List[int]:
         """
@@ -130,6 +136,9 @@ class DeepTreeController(DeepController):
         labels = np.array(self.__build_labels(pods))
         end = perf_counter()
         print("Labels generated in %.3f seconds" % (end - start))
+
+        # Replace the model: start fresh every time
+        self.model = self.__build_model()
 
         print("Training...")
         results = self.train_with_labels(states, labels, epochs)
