@@ -38,7 +38,7 @@ def _build_labels(tid: str,
                   pods: List[Tuple[PodState, List[float]]],
                   orig_rfunc
                   ) -> List[float]:
-    model = tf.keras.models.load_model(model_path)
+    model = tf.keras.models.load_model(model_path, custom_objects = {"LeakyReLU": tf.keras.layers.LeakyReLU})
     controller = DeepController(board, V6(), ad)
     controller.model = model
 
@@ -76,15 +76,15 @@ class DeepTreeController(DeepController):
             tf.keras.layers.Dense(
                 48,
                 input_shape=(self.vectorizer.vec_len(),),
-                activation="sigmoid",
+                activation=tf.keras.layers.LeakyReLU(alpha=0.1),
             ),
             tf.keras.layers.Dense(
                 32,
-                activation="sigmoid",
+                activation=tf.keras.layers.LeakyReLU(alpha=0.1),
             ),
             tf.keras.layers.Dense(
                 24,
-                activation="sigmoid",
+                activation=tf.keras.layers.LeakyReLU(alpha=0.1),
             ),
             tf.keras.layers.Dense(
                 self.ad.num_actions,
@@ -92,14 +92,14 @@ class DeepTreeController(DeepController):
         ])
 
         model.compile(
-            optimizer=tf.optimizers.Adam(0.001),
+            optimizer=tf.optimizers.Adam(0.002),
             metrics=['accuracy'],
             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
         )
 
         return model
 
-    def __build_labels(self, pods: List[Tuple[PodState, List[float]]], n_proc: int = 3) -> List[int]:
+    def __build_labels(self, pods: List[Tuple[PodState, List[float]]], n_proc: int = 12) -> List[int]:
         """
         Using the given reward func, get labels (target actions) for each state
         """

@@ -12,7 +12,7 @@ class ActionDiscretizer:
     """
     Tools to manage chopping up the action space into discrete segments
     """
-    def __init__(self, num_thrust: int = 3, num_angle: int = 3):
+    def __init__(self, num_thrust: int = 2, num_angle: int = 3):
         self.num_thrust = num_thrust
         self.num_angle = num_angle
         self.num_actions = num_thrust * num_angle
