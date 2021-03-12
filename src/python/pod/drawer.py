@@ -7,6 +7,7 @@ import numpy as np
 
 from matplotlib.animation import FuncAnimation, PillowWriter, HTMLWriter
 from matplotlib.patches import Circle, Wedge, Rectangle
+from matplotlib.collections import LineCollection
 from IPython.display import Image, display, HTML
 from ipywidgets import widgets
 
@@ -173,6 +174,7 @@ class Drawer:
                 as_gif = False,
                 filename = '/tmp/pods',
                 reset: bool = True,
+                trail_len: int = 20,
                 fps: int = 10):
         """
         Generate an animated GIF of the players running through the game
@@ -193,9 +195,6 @@ class Drawer:
             self.ax.add_artist(ca)
             check_artists.append(ca)
 
-        def draw_background():
-            return _get_field_artist()
-
         pod_artists = [
             _get_pod_artist(p.pod, _gen_color(idx))
             for (idx, p) in enumerate(self.players)
@@ -203,14 +202,25 @@ class Drawer:
         for a in pod_artists: self.ax.add_artist(a)
         plt.legend(pod_artists, self.labels)
 
+        pod_trails = [LineCollection([], colors = _gen_color(i)) for i in range(len(self.players))]
+        for p in pod_trails:
+            p.set_segments([])
+            p.set_linestyle(':')
+            self.ax.add_collection(p)
+
         label = widgets.Label()
         display(label)
         c = [0]
 
+        def draw_background():
+            return [_get_field_artist()]
+
+        prev_pos_log = [None]
         def do_animate(frame_log: List[Dict]):
             label.value = "Drawing frame {}".format(c[0])
             c[0] += 1
             check_colors = ['royalblue' for i in range(len(self.board.checkpoints))]
+            pos_log = []
             for (idx, player_log) in enumerate(frame_log):
                 pod = player_log['pod']
                 theta1, theta2, center = _pod_wedge_info(pod)
@@ -218,10 +228,18 @@ class Drawer:
                 pod_artists[idx].set_theta1(theta1)
                 pod_artists[idx].set_theta2(theta2)
                 pod_artists[idx]._recompute_path() # pylint: disable=protected-access
-
+                pos_log.append((pod.pos.x, pod.pos.y))
                 check_colors[pod.nextCheckId] = _gen_color(idx)
+
+            if prev_pos_log[0] is not None and trail_len > 0:
+                for idx in range(len(frame_log)):
+                    line = [prev_pos_log[0][idx], pos_log[idx]]
+                    segs = pod_trails[idx].get_segments() + [line]
+                    pod_trails[idx].set_segments(segs[-trail_len:])
+
+            prev_pos_log[0] = pos_log
             for col, check in zip(check_colors, check_artists): check.set_color(col)
-            return pod_artists + check_artists
+            return pod_artists + check_artists + pod_trails
 
         anim = FuncAnimation(
             plt.gcf(),
