@@ -3,6 +3,7 @@ from typing import List, Tuple, Callable, Dict
 
 import matplotlib.pyplot as plt
 import math
+import numpy as np
 
 from matplotlib.animation import FuncAnimation, PillowWriter, HTMLWriter
 from matplotlib.patches import Circle, Wedge, Rectangle
@@ -86,7 +87,7 @@ class Drawer:
             self.players = [Player(c) for c in controllers]
         else:
             raise ValueError('Must provide either players or controllers')
-        
+
         if labels is None:
             labels = _gen_labels(self.players)
         elif len(labels) < len(self.players):
@@ -186,16 +187,14 @@ class Drawer:
 
         self.__prepare_for_world()
 
-        back_artists = []
+        check_artists = []
+        for (idx, check) in enumerate(self.board.checkpoints):
+            ca = self.__draw_check(check, idx)
+            self.ax.add_artist(ca)
+            check_artists.append(ca)
+
         def draw_background():
-            back_artists.append(_get_field_artist())
-            for (idx, check) in enumerate(self.board.checkpoints):
-                back_artists.append(self.__draw_check(check, idx))
-
-            for artist in back_artists:
-                self.ax.add_artist(artist)
-
-            return back_artists
+            return _get_field_artist()
 
         pod_artists = [
             _get_pod_artist(p.pod, _gen_color(idx))
@@ -211,6 +210,7 @@ class Drawer:
         def do_animate(frame_log: List[Dict]):
             label.value = "Drawing frame {}".format(c[0])
             c[0] += 1
+            check_colors = ['royalblue' for i in range(len(self.board.checkpoints))]
             for (idx, player_log) in enumerate(frame_log):
                 pod = player_log['pod']
                 theta1, theta2, center = _pod_wedge_info(pod)
@@ -218,7 +218,10 @@ class Drawer:
                 pod_artists[idx].set_theta1(theta1)
                 pod_artists[idx].set_theta2(theta2)
                 pod_artists[idx]._recompute_path() # pylint: disable=protected-access
-            return pod_artists
+
+                check_colors[pod.nextCheckId] = _gen_color(idx)
+            for col, check in zip(check_colors, check_artists): check.set_color(col)
+            return pod_artists + check_artists
 
         anim = FuncAnimation(
             plt.gcf(),
@@ -315,4 +318,3 @@ class Drawer:
             lab.set_color(tick_colors[i])
         plt.grid()
         plt.show()
-
