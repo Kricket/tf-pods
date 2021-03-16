@@ -126,7 +126,7 @@ class Drawer:
         log = JupyterLog()
 
         while max(p.pod.laps for p in self.players) < max_laps and len(self.hist) < max_frames:
-            log.replace("Playing turn {}".format(len(self.hist)))
+            log.replace("Playing turn {}".format(len(self.hist) + 1))
             turnlog = []
             for p in self.players:
                 p.step()
@@ -191,7 +191,7 @@ class Drawer:
                 filename = '/tmp/pods',
                 reset: bool = True,
                 trail_len: int = 20,
-                highlight_checks: bool = True,
+                highlight_checks: bool = False,
                 show_vel: bool = True,
                 fps: int = 10):
         """

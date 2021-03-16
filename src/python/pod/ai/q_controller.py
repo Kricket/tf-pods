@@ -1,96 +1,34 @@
 import math
 import random
-from typing import List, Callable
+from typing import List, Callable, Tuple
 
 import numpy as np
+from pod.ai.action_discretizer import ActionDiscretizer
+from pod.ai.ai_utils import MAX_DIST
+from pod.ai.vectorizer import Vectorizer
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import Controller, PlayOutput
 from pod.util import PodState
-from vec2 import UNIT, Vec2
+from vec2 import UNIT
 
 
-###############################################
-# Discretized state space
+def _discretize(val: float, precision: int) -> int:
+    return math.floor(val * precision)
 
-# Square of distance from pod to next check
-DIST_SQ_STATES = [a**2 for a in [
-    *[x * Constants.check_radius() for x in range(1, 7)],
-    *[x * Constants.check_radius() for x in range(8, 16, 2)]
-]]
+def _to_state(board: PodBoard, pod: PodState) -> Tuple[int,int,int,int,int]:
+    vel = pod.vel.rotate(-pod.angle)
 
-# Angle from pod to next check
-ANG_STATES = [
-    math.pi * (-0.5),
-    math.pi * (-0.3),
-    math.pi * (-0.2),
-    math.pi * (-0.1),
-    math.pi * (-0.05),
-    0,
-    math.pi * 0.05,
-    math.pi * 0.1,
-    math.pi * 0.2,
-    math.pi * 0.3,
-    math.pi * 0.5,
-]
+    check1 = (board.get_check(pod.nextCheckId) - pod.pos).rotate(-pod.angle)
+    check1_to_2 = board.get_check(pod.nextCheckId + 1) - board.checkpoints[pod.nextCheckId]
 
-# Angle from pod to its velocity
-VEL_ANG_STATES = [s for s in ANG_STATES]
-
-# Magnitude squared of pod velocity
-VEL_MAG_SQ_STATES = [v ** 2 for v in [x * Constants.max_vel() / 5 for x in range(1, 5)]]
-
-TOTAL_STATES = len(DIST_SQ_STATES) * len(ANG_STATES) * len(VEL_ANG_STATES) * len(VEL_MAG_SQ_STATES)
-
-
-def get_index(value: float, table: List[float]) -> int:
-    """
-    Get the index of the value in the table that is closest to the given value.
-    Assumes that the table is sorted in increasing order!
-    """
-    if value < table[0]: return 0
-    if value > table[-1]: return len(table) - 1
-
-    val_dist = math.fabs(value - table[0])
-    for idx in range(1, len(table)):
-        next_dist = math.fabs(value - table[idx])
-        if next_dist < val_dist:
-            val_dist = next_dist
-        else:
-            return idx - 1
-    return len(table) - 1
-
-
-def pod_to_state(pod: PodState, board: PodBoard) -> int:
-    """
-    Get the state ID for the given pod
-    """
-    pod_to_check = board.get_check(pod.nextCheckId) - pod.pos
-    dist_state = get_index(pod_to_check.square_length(), DIST_SQ_STATES)
-    ang_state = get_index(pod_to_check.angle() - pod.angle, ANG_STATES)
-    vel_ang = pod.vel.angle() - pod.angle
-    vel_ang_state = get_index(vel_ang, VEL_ANG_STATES)
-    vel_mag_state = get_index(pod.vel.square_length(), VEL_MAG_SQ_STATES)
-
-    return dist_state    * (len(VEL_MAG_SQ_STATES) * len(VEL_ANG_STATES) * len(ANG_STATES)) \
-         + ang_state     * (len(VEL_MAG_SQ_STATES) * len(VEL_ANG_STATES)) \
-         + vel_ang_state *  len(VEL_MAG_SQ_STATES) \
-         + vel_mag_state
-
-
-###############################################
-# Discretized action space
-# Here, the actions are to aim for various points around the target
-
-TARGET_ACTIONS = [UNIT.rotate(math.pi * a / 6.0) * Constants.check_radius() * 5 for a in range(0, 12)]
-THRUST_ACTIONS = [0, Constants.max_thrust() / 2, Constants.max_thrust()]
-
-TOTAL_ACTIONS = len(TARGET_ACTIONS) * len(THRUST_ACTIONS)
-
-def action_to_play(action: int, next_check: Vec2) -> PlayOutput:
-    thrust_idx = int(action / len(TARGET_ACTIONS))
-    target_idx = action % len(TARGET_ACTIONS)
-    return PlayOutput(next_check + TARGET_ACTIONS[target_idx], THRUST_ACTIONS[thrust_idx])
+    return (
+        _discretize(vel.x / Constants.max_vel(), 10),
+        _discretize(vel.y / Constants.max_vel(), 10),
+        _discretize(check1.x / MAX_DIST, 20),
+        _discretize(check1.y / MAX_DIST, 20),
+        _discretize(check1_to_2.angle(), 8)
+    )
 
 
 class QController(Controller):
@@ -100,61 +38,106 @@ class QController(Controller):
     """
     def __init__(self, board: PodBoard, reward_func: Callable[[PodBoard, PodState, PodState], float]):
         super().__init__(board)
+        self.ad = ActionDiscretizer()
         self.reward_func = reward_func
-        self.q_table = np.zeros((TOTAL_STATES, TOTAL_ACTIONS))
+        self.q_table = {}
+
+    def __get_q_values(self, pod: PodState) -> List[float]:
+        state = _to_state(self.board, pod)
+        if state not in self.q_table:
+            self.q_table[state] = np.zeros(self.ad.num_actions)
+        return self.q_table[state]
 
     def play(self, pod: PodState) -> PlayOutput:
-        state = pod_to_state(pod, self.board)
-        action = np.argmax(self.q_table[state,:])
-        return action_to_play(action, self.board.checkpoints[pod.nextCheckId])
+        action = np.argmax(self.__get_q_values(pod))
+        return self.ad.action_to_output(action, pod.angle, pod.pos)
+
+    def __do_train(self,
+                   pod: PodState,
+                   max_turns: int,
+                   prob_rand_action: float,
+                   learning_rate: float,
+                   future_discount: float
+                   ) -> float:
+        max_reward = self.reward_func(self.board, pod, pod)
+        cur_check = pod.nextCheckId
+
+        # Episode is done when we've hit a new checkpoint, or exceeded the max turns
+        while pod.turns < max_turns and cur_check == pod.nextCheckId:
+            # Choose an action
+            if random.random() < prob_rand_action:
+                action = math.floor(random.random() * self.ad.num_actions)
+            else:
+                action = np.argmax(self.__get_q_values(pod))
+
+            # Take the action and calculate the reward. Since the discretization of the state space is
+            # rough, we repeat the action until we get to a new state
+            play = self.ad.action_to_output(action, pod.angle, pod.pos)
+
+            next_pod = self.board.step(pod, play)
+            reward = self.reward_func(self.board, pod, next_pod)
+
+            # Update the Q-table
+            cur_state_q = self.__get_q_values(pod)
+            next_state_q = self.__get_q_values(next_pod)
+            cur_state_q[action] = \
+                (1 - learning_rate) * cur_state_q[action] + \
+                learning_rate * (reward + future_discount * max(next_state_q))
+
+            max_reward = max(reward, max_reward)
+            pod = next_pod
+
+        return max_reward
 
     def train(self,
               num_episodes: int = 10,
               max_turns: int = 50,
               prob_rand_action: float = 0.5,
               learning_rate: float = 0.5,
-              future_discount: float = 0.9):
-        reward_per_ep = []
+              future_discount: float = 0.8
+              ) -> List[float]:
+        """
+        Train starting at a fixed faraway point
+        """
+        max_reward_per_ep = []
 
         for episode in range(num_episodes):
-            total_ep_reward = 0
             # The pod starts in a random position at a fixed (far) distance from the check,
             # pointing in a random direction
             pos_offset = UNIT.rotate(random.random() * 2 * math.pi) * Constants.check_radius() * 17
             pod = PodState(
-                pos=self.board.get_check(0) + pos_offset,
+                pos=self.board.checkpoints[0] + pos_offset,
                 angle=2 * math.pi * random.random() - math.pi
             )
-            current_state = pod_to_state(pod, self.board)
 
-            for turn in range(max_turns):
-                # Choose an action
-                if random.random() < prob_rand_action:
-                    action = math.floor(random.random() * TOTAL_ACTIONS)
-                else:
-                    action = np.argmax(self.q_table[current_state,:])
+            max_reward_per_ep.append(self.__do_train(
+                pod,
+                max_turns,
+                prob_rand_action,
+                learning_rate,
+                future_discount))
 
-                # Take the action and calculate the reward. Since the discretization of the state space is
-                # rough, we repeat the action until we get to a new state
-                next_state = current_state
-                play = action_to_play(action, self.board.get_check(pod.nextCheckId))
+        return max_reward_per_ep
 
-                old_pod = pod.clone()
-                tries = 0
-                while next_state == current_state and tries < 5:
-                    self.board.step(pod, play, pod)
-                    next_state = pod_to_state(pod, self.board)
-                    tries += 1
+    def train_iteratively(
+            self,
+            pods: List[PodState],
+            max_turns: int = 50,
+            prob_rand_action: float = 0.5,
+            learning_rate: float = 0.5,
+            future_discount: float = 0.8
+    ) -> List[float]:
+        """
+        Train by iterating through all given states
+        """
+        max_reward_per_ep = []
 
-                reward = self.reward_func(self.board, old_pod, pod)
+        for pod in pods:
+            max_reward_per_ep.append(self.__do_train(
+                pod.clone(),
+                max_turns,
+                prob_rand_action,
+                learning_rate,
+                future_discount))
 
-                # Update the Q-table
-                self.q_table[current_state, action] = (1 - learning_rate) * self.q_table[current_state, action] \
-                    + learning_rate * (reward + future_discount * max(self.q_table[next_state,:]))
-
-                total_ep_reward += reward
-                current_state = next_state
-
-            reward_per_ep.append(total_ep_reward)
-
-        return reward_per_ep
+        return max_reward_per_ep

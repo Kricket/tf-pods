@@ -49,4 +49,3 @@ class V6(Vectorizer):
 
     def vec_len(self) -> int:
         return 6
-
