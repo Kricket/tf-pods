@@ -5,7 +5,6 @@ from typing import List, Callable, Tuple
 import numpy as np
 from pod.ai.action_discretizer import ActionDiscretizer
 from pod.ai.ai_utils import MAX_DIST
-from pod.ai.vectorizer import Vectorizer
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import Controller, PlayOutput
@@ -20,14 +19,14 @@ def _to_state(board: PodBoard, pod: PodState) -> Tuple[int,int,int,int,int]:
     vel = pod.vel.rotate(-pod.angle)
 
     check1 = (board.get_check(pod.nextCheckId) - pod.pos).rotate(-pod.angle)
-    check1_to_2 = board.get_check(pod.nextCheckId + 1) - board.checkpoints[pod.nextCheckId]
+    check2 = (board.get_check(pod.nextCheckId + 1) - pod.pos).rotate(-pod.angle)
 
     return (
         _discretize(vel.x / Constants.max_vel(), 10),
         _discretize(vel.y / Constants.max_vel(), 10),
         _discretize(check1.x / MAX_DIST, 20),
         _discretize(check1.y / MAX_DIST, 20),
-        _discretize(check1_to_2.angle(), 8)
+        _discretize(check2.angle(), 4)
     )
 
 
@@ -42,6 +41,21 @@ class QController(Controller):
         self.reward_func = reward_func
         self.q_table = {}
 
+        self.mins = {'x': 999999, 'y': 999999, 'vx': 999999, 'vy': 999999, 'ang': 999999}
+        self.maxs = {'x': -999999, 'y': -999999, 'vx': -999999, 'vy': -999999, 'ang': -999999}
+
+    def __record_minmax(self, pod: PodState):
+        self.mins['x'] = min(self.mins['x'], pod.pos.x)
+        self.mins['y'] = min(self.mins['y'], pod.pos.y)
+        self.mins['vx'] = min(self.mins['vx'], pod.vel.x)
+        self.mins['vy'] = min(self.mins['vy'], pod.vel.y)
+        self.mins['ang'] = min(self.mins['ang'], pod.angle)
+        self.maxs['x'] = max(self.maxs['x'], pod.pos.x)
+        self.maxs['y'] = max(self.maxs['y'], pod.pos.y)
+        self.maxs['vx'] = max(self.maxs['vx'], pod.vel.x)
+        self.maxs['vy'] = max(self.maxs['vy'], pod.vel.y)
+        self.maxs['ang'] = max(self.maxs['ang'], pod.angle)
+        
     def __get_q_values(self, pod: PodState) -> List[float]:
         state = _to_state(self.board, pod)
         if state not in self.q_table:
@@ -61,6 +75,7 @@ class QController(Controller):
                    ) -> float:
         max_reward = self.reward_func(self.board, pod, pod)
         cur_check = pod.nextCheckId
+        self.__record_minmax(pod)
 
         # Episode is done when we've hit a new checkpoint, or exceeded the max turns
         while pod.turns < max_turns and cur_check == pod.nextCheckId:
@@ -76,6 +91,7 @@ class QController(Controller):
 
             next_pod = self.board.step(pod, play)
             reward = self.reward_func(self.board, pod, next_pod)
+            self.__record_minmax(next_pod)
 
             # Update the Q-table
             cur_state_q = self.__get_q_values(pod)
