@@ -19,14 +19,13 @@ def _to_state(board: PodBoard, pod: PodState) -> Tuple[int,int,int,int,int]:
     vel = pod.vel.rotate(-pod.angle)
 
     check1 = (board.get_check(pod.nextCheckId) - pod.pos).rotate(-pod.angle)
-    check2 = (board.get_check(pod.nextCheckId + 1) - pod.pos).rotate(-pod.angle)
+#    check1_to_2 = board.get_check(pod.nextCheckId + 1) - board.checkpoints[pod.nextCheckId]
 
     return (
         _discretize(vel.x / Constants.max_vel(), 10),
         _discretize(vel.y / Constants.max_vel(), 10),
         _discretize(check1.x / MAX_DIST, 20),
         _discretize(check1.y / MAX_DIST, 20),
-        _discretize(check2.angle(), 4)
     )
 
 
@@ -55,7 +54,7 @@ class QController(Controller):
         self.maxs['vx'] = max(self.maxs['vx'], pod.vel.x)
         self.maxs['vy'] = max(self.maxs['vy'], pod.vel.y)
         self.maxs['ang'] = max(self.maxs['ang'], pod.angle)
-        
+
     def __get_q_values(self, pod: PodState) -> List[float]:
         state = _to_state(self.board, pod)
         if state not in self.q_table:
@@ -75,7 +74,7 @@ class QController(Controller):
                    ) -> float:
         max_reward = self.reward_func(self.board, pod, pod)
         cur_check = pod.nextCheckId
-        self.__record_minmax(pod)
+#        self.__record_minmax(pod)
 
         # Episode is done when we've hit a new checkpoint, or exceeded the max turns
         while pod.turns < max_turns and cur_check == pod.nextCheckId:
@@ -91,7 +90,7 @@ class QController(Controller):
 
             next_pod = self.board.step(pod, play)
             reward = self.reward_func(self.board, pod, next_pod)
-            self.__record_minmax(next_pod)
+#            self.__record_minmax(next_pod)
 
             # Update the Q-table
             cur_state_q = self.__get_q_values(pod)
@@ -107,20 +106,20 @@ class QController(Controller):
 
     def train(self,
               num_episodes: int = 10,
-              max_turns: int = 50,
               prob_rand_action: float = 0.5,
-              learning_rate: float = 0.5,
+              max_turns: int = 50,
+              learning_rate: float = 1.0,
               future_discount: float = 0.8
               ) -> List[float]:
         """
-        Train starting at a fixed faraway point
+        Train starting at a random point
         """
         max_reward_per_ep = []
 
         for episode in range(num_episodes):
             # The pod starts in a random position at a fixed (far) distance from the check,
             # pointing in a random direction
-            pos_offset = UNIT.rotate(random.random() * 2 * math.pi) * Constants.check_radius() * 17
+            pos_offset = UNIT.rotate(random.random() * 2 * math.pi) * Constants.check_radius() * (16 * random.random() + 1)
             pod = PodState(
                 pos=self.board.checkpoints[0] + pos_offset,
                 angle=2 * math.pi * random.random() - math.pi
