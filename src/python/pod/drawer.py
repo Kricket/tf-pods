@@ -1,6 +1,6 @@
 import math
 from pathlib import Path
-from typing import List, Tuple, Callable, Dict
+from typing import List, Tuple, Dict
 
 import matplotlib.pyplot as plt
 import matplotlib.rcsetup
@@ -10,6 +10,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.patches import Circle, Wedge, Rectangle
 
 from logger import JupyterLog
+from pod.ai.rewards import RewardFunc
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import Controller
@@ -324,8 +325,7 @@ class Drawer:
             return HTML(path.read_text())
 
 
-    def chart_rewards(self,
-                      reward_func: Callable[[PodBoard, PodState, PodState], float]):
+    def chart_rewards(self, reward_func: RewardFunc):
         """
         Display a graph of the rewards for each player at each turn
         """
@@ -335,9 +335,8 @@ class Drawer:
         for (player_idx, player) in enumerate(self.players):
             rewards = []
             for frame_idx in range(1, len(self.hist)):
-                prev_log = self.hist[frame_idx - 1][player_idx]
                 next_log = self.hist[frame_idx][player_idx]
-                rewards.append(reward_func(self.board, prev_log['pod'], next_log['pod']))
+                rewards.append(reward_func(self.board, next_log['pod']))
 
             plt.plot(rewards,
                      color=_gen_color(player_idx),
@@ -351,7 +350,7 @@ class Drawer:
 
 
     def compare_rewards(self,
-                        rewarders: List[Tuple[str, Callable[[PodBoard, PodState, PodState], float]]],
+                        rewarders: List[Tuple[str, RewardFunc]],
                         players: List[int] = None):
         """
         Compare the reward function for the given players
@@ -381,7 +380,7 @@ class Drawer:
                 for f_idx in range(1, len(self.hist)):
                     prev_pod = self.hist[f_idx-1][p_idx]['pod']
                     next_pod = self.hist[f_idx][p_idx]['pod']
-                    rewards.append(r_def[1](self.board, prev_pod, next_pod))
+                    rewards.append(r_def[1](self.board, next_pod))
 
                     if prev_pod.nextCheckId != next_pod.nextCheckId:
                         ticks.append(f_idx)

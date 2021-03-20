@@ -1,66 +1,48 @@
 import math
 import random
-from typing import List, Tuple, Callable
+from typing import List, Tuple
 
 import tensorflow as tf
 
 import numpy as np
-from pod.ai.action_discretizer import ActionDiscretizer
+from pod.ai.action_discretizer import ActionDiscretizer, DiscreteActionController
+from pod.ai.replay_buffer import ReplayBuffer
+from pod.ai.rewards import RewardFunc
 from pod.ai.vectorizer import Vectorizer, V6
 from pod.board import PodBoard
 from pod.constants import Constants
-from pod.controller import Controller, PlayOutput
 from pod.util import PodState
 from vec2 import UNIT
 
 
-class ReplayBuffer:
-    def __init__(self, capacity: int = 5000):
-        self.capacity = capacity
-        self.buffer = []
-
-    def add(self, state, action, reward, next_state):
-        self.buffer.append((state, action, reward, next_state))
-        if len(self.buffer) > self.capacity:
-            del self.buffer[0]
-
-    def is_full(self):
-        return len(self.buffer) >= self.capacity
-
-    def sample(self, size: int):
-        return random.sample(self.buffer, size)
-
-    def clear(self):
-        self.buffer = []
-
-
-def sparse_reward(pod: PodState, board: PodBoard) -> float:
-    return pod.nextCheckId + len(board.checkpoints) * pod.laps
-
-
-class DeepQController(Controller):
+class DeepQController(DiscreteActionController):
     def __init__(self,
                  board: PodBoard,
-                 reward_func: Callable[[PodBoard, PodState, PodState], float],
-                 discretizer: ActionDiscretizer = ActionDiscretizer(3, 3),
+                 reward_func: RewardFunc,
+                 discretizer: ActionDiscretizer = ActionDiscretizer(),
                  vectorizer: Vectorizer = V6()):
-        super().__init__(board)
+        super().__init__(board, discretizer)
 
         self.reward_func = reward_func
-        self.ad = discretizer
         self.replay = ReplayBuffer()
         self.vectorizer = vectorizer
 
         self.model = tf.keras.Sequential([
             tf.keras.layers.Dense(
+                48,
+                input_shape=(self.vectorizer.vec_len(),),
+                kernel_initializer="zeros",
+                activation=tf.keras.layers.LeakyReLU(alpha=0.01),
+            ),
+            tf.keras.layers.Dense(
                 32,
                 input_shape=(self.vectorizer.vec_len(),),
                 kernel_initializer="zeros",
-                activation="sigmoid",
+                activation=tf.keras.layers.LeakyReLU(alpha=0.01),
             ),
             tf.keras.layers.Dense(
                 self.ad.num_actions,
-                kernel_initializer="zeros",
+                activation=tf.keras.layers.LeakyReLU(alpha=0.01),
             ),
         ])
 
@@ -70,8 +52,8 @@ class DeepQController(Controller):
             loss=tf.keras.losses.MeanSquaredError()
         )
 
-    def play(self, pod: PodState) -> PlayOutput:
-        return self.ad.action_to_output(self.__get_best_action(pod), pod.angle, pod.pos)
+    def get_action(self, pod: PodState) -> int:
+        return self.__get_best_action(pod)
 
     def __get_output(self, pod: PodState = None, state_vec = None):
         """
@@ -114,7 +96,7 @@ class DeepQController(Controller):
         Get the result of the given pod taking the given action
         """
         next_pod = self.board.step(pod, self.ad.action_to_output(action, pod.angle, pod.pos), PodState())
-        reward = self.reward_func(self.board, pod, next_pod)
+        reward = self.reward_func(self.board, next_pod)
 
         return next_pod, self.vectorizer.to_vector(self.board, next_pod), reward
 
@@ -125,7 +107,7 @@ class DeepQController(Controller):
             action = self.__choose_action(current_state, prob_rand_action)
             next_pod, next_state, reward = self.__step(pod, action)
 
-            self.replay.add(current_state, action, reward, next_state)
+            self.replay.add((current_state, action, reward, next_state))
 
             total_reward += reward
 

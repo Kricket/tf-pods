@@ -8,11 +8,12 @@ from pod.util import PodState, clean_angle
 
 #################################################
 # Reward functions: signature is
-# func(board, prev_state, next_state) -> float
+# func(board, state) -> float
 #################################################
 
+RewardFunc = Callable[[PodBoard, PodState], float]
 
-def pgr(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
+def pgr(board: PodBoard, pod: PodState) -> float:
     """
     Pretty Good Reward
     Attempts to estimate the distance without using a SQRT calculation.
@@ -27,7 +28,7 @@ def pgr(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
 
     return 2*checks_hit - dist_estimate + 1
 
-def regood(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
+def regood(board: PodBoard, pod: PodState) -> float:
     pod_to_check = board.checkpoints[pod.nextCheckId] - pod.pos
     prev_to_check = board.checkpoints[pod.nextCheckId] - board.get_check(pod.nextCheckId-1)
 
@@ -49,21 +50,21 @@ def regood(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
 #################################################
 
 def make_reward(
-        factors: List[Tuple[float, Callable[[PodBoard, PodState, PodState], float]]]
-) -> Callable[[PodBoard, PodState, PodState], float]:
+        factors: List[Tuple[float, RewardFunc]]
+) -> RewardFunc:
     """
     Generate a reward function which is a linear combination of other reward functions
     """
-    def rfunc(board: PodBoard, prev_pod: PodState, pod: PodState):
+    def rfunc(board: PodBoard, pod: PodState):
         total = 0.0
         for (factor, func) in factors:
-            res = factor * func(board, prev_pod, pod)
+            res = factor * func(board, pod)
             total += res
         return total
     return rfunc
 
 
-def dist_reward(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
+def dist_reward(board: PodBoard, pod: PodState) -> float:
     """
     Dense reward based on the distance to the next checkpoint, scaled to be in (0, 1).
 
@@ -79,7 +80,7 @@ def dist_reward(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
     return 1 - dist_penalty
 
 
-def ang_reward(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
+def ang_reward(board: PodBoard, pod: PodState) -> float:
     """
     Returns the angle between the pod's direction and the next checkpoint, scaled to be in (0, 1)
     """
@@ -89,35 +90,16 @@ def ang_reward(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
     return 1 - math.fabs(angle / math.pi)
 
 
-def check_reward(board: PodBoard, prev_pod: PodState, pod: PodState) -> float:
+def check_reward(board: PodBoard, pod: PodState) -> float:
     """
-    Returns 1 point for every checkpoint hit
+    Sparse reward: returns 1 point for every checkpoint hit
     """
     return len(board.checkpoints) * pod.laps + pod.nextCheckId
 
 
-def diff_reward(board: PodBoard, prev_pod: PodState, next_pod: PodState) -> float:
-    """
-    Dense reward based on the change in distance to the next check, scaled to be in (-1, 1).
-
-    This should be used with the check_reward, since it doesn't know what to do when
-      the pod hits a check.
-    """
-    if prev_pod.nextCheckId != next_pod.nextCheckId:
-        # Distance would make no sense here.
-        return 0
-
-    check = board.checkpoints[prev_pod.nextCheckId]
-    prev_dist = (check - prev_pod.pos).length()
-    next_dist = (check - next_pod.pos).length()
-    return (prev_dist - next_dist) / Constants.max_vel()
-
-
-def speed_reward(board: PodBoard, prev_pod: PodState, next_pod: PodState) -> float:
+def speed_reward(board: PodBoard, next_pod: PodState) -> float:
     """
     Indicates how much the speed is taking us toward the next check (scaled).
-
-    Similar to the diff reward, although the score
     """
     pod_to_check = board.checkpoints[next_pod.nextCheckId] - next_pod.pos
     dist_to_check = pod_to_check.length()

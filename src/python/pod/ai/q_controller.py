@@ -1,10 +1,11 @@
 import math
 import random
-from typing import List, Callable, Tuple
+from typing import List, Tuple
 
 import numpy as np
 from pod.ai.action_discretizer import ActionDiscretizer
 from pod.ai.ai_utils import MAX_DIST
+from pod.ai.rewards import RewardFunc
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import Controller, PlayOutput
@@ -15,7 +16,7 @@ from vec2 import UNIT
 def _discretize(val: float, precision: int) -> int:
     return math.floor(val * precision)
 
-def _to_state(board: PodBoard, pod: PodState) -> Tuple[int,int,int,int,int]:
+def _to_state(board: PodBoard, pod: PodState) -> Tuple[int,int,int,int]:
     vel = pod.vel.rotate(-pod.angle)
 
     check1 = (board.get_check(pod.nextCheckId) - pod.pos).rotate(-pod.angle)
@@ -34,7 +35,7 @@ class QController(Controller):
     A Controller that uses Q-Learning to win the race. The state and action spaces are discretized
     so that the table is manageable.
     """
-    def __init__(self, board: PodBoard, reward_func: Callable[[PodBoard, PodState, PodState], float]):
+    def __init__(self, board: PodBoard, reward_func: RewardFunc):
         super().__init__(board)
         self.ad = ActionDiscretizer()
         self.reward_func = reward_func
@@ -72,7 +73,7 @@ class QController(Controller):
                    learning_rate: float,
                    future_discount: float
                    ) -> float:
-        max_reward = self.reward_func(self.board, pod, pod)
+        max_reward = self.reward_func(self.board, pod)
         cur_check = pod.nextCheckId
 #        self.__record_minmax(pod)
 
@@ -89,7 +90,7 @@ class QController(Controller):
             play = self.ad.action_to_output(action, pod.angle, pod.pos)
 
             next_pod = self.board.step(pod, play)
-            reward = self.reward_func(self.board, pod, next_pod)
+            reward = self.reward_func(self.board, next_pod)
 #            self.__record_minmax(next_pod)
 
             # Update the Q-table

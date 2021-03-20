@@ -1,12 +1,13 @@
 from multiprocessing import Pool
 from time import perf_counter
-from typing import Callable, List, Tuple
+from typing import List, Tuple
 
 import tensorflow as tf
 
 import numpy as np
 from pod.ai.action_discretizer import ActionDiscretizer
 from pod.ai.misc_controllers import DeepController
+from pod.ai.rewards import RewardFunc
 from pod.ai.vectorizer import Vectorizer, V6
 from pod.board import PodBoard
 from pod.controller import Controller
@@ -16,16 +17,15 @@ from pod.util import PodState
 def _wrap_reward_func(
         controller: Controller,
         depth: int,
-        orig_rfunc
-) -> Callable[[PodBoard, PodState, PodState], float]:
+        orig_rfunc: RewardFunc
+) -> RewardFunc:
     """
     Get a reward func that calculates the reward after playing to the current depth
     """
-    def r_func(board: PodBoard, prev_pod, pod) -> float:
+    def r_func(board: PodBoard, pod) -> float:
         for x in range(depth):
-            prev_pod = pod
             pod = board.step(pod, controller.play(pod))
-        return orig_rfunc(board, prev_pod, pod)
+        return orig_rfunc(board, pod)
 
     return r_func
 
@@ -36,7 +36,7 @@ def _build_labels(tid: str,
                   ad: ActionDiscretizer,
                   board: PodBoard,
                   pods: List[Tuple[PodState, List[float]]],
-                  orig_rfunc
+                  orig_rfunc: RewardFunc
                   ) -> List[float]:
     model = tf.keras.models.load_model(model_path, custom_objects = {"LeakyReLU": tf.keras.layers.LeakyReLU})
     controller = DeepController(board, V6(), ad)
@@ -57,7 +57,7 @@ def _build_labels(tid: str,
 class DeepTreeController(DeepController):
     def __init__(self,
                  board: PodBoard,
-                 reward_func: Callable[[PodBoard, PodState, PodState], float],
+                 reward_func: RewardFunc,
                  model=None,
                  discretizer: ActionDiscretizer = ActionDiscretizer(),
                  vectorizer: Vectorizer = V6()):

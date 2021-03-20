@@ -2,9 +2,9 @@ import math
 from random import random
 
 import tensorflow as tf
-import numpy as np
 
-from pod.ai.action_discretizer import ActionDiscretizer
+import numpy as np
+from pod.ai.action_discretizer import ActionDiscretizer, DiscreteActionController
 from pod.ai.vectorizer import Vectorizer
 from pod.board import PlayOutput, PodBoard
 from pod.constants import Constants
@@ -24,22 +24,23 @@ class RandomController(Controller):
         )
 
 
-class DeepController(Controller):
+class DeepController(DiscreteActionController):
     """
     Abstract base class for a Controller that uses a NN to make plays
     """
     def __init__(self, board: PodBoard,
                  vectorizer: Vectorizer,
                  discretizer: ActionDiscretizer = ActionDiscretizer()):
-        super().__init__(board)
+        super().__init__(board, discretizer)
         self.vectorizer = vectorizer
-        self.ad = discretizer
         self.model = None
 
-    def play(self, pod: PodState) -> PlayOutput:
+    def get_action(self, pod: PodState) -> int:
+        """
+        The action is whatever output neuron has the highest value
+        """
         output = self._get_output(pod)
-        best_action = np.argmax(output)
-        return self.ad.action_to_output(best_action, pod.angle, pod.pos)
+        return np.argmax(output)
 
     def _get_output(self, pod: PodState):
         """

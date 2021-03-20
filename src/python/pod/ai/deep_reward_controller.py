@@ -1,10 +1,11 @@
-from typing import List, Callable
+from typing import List
 
 import tensorflow as tf
 
 import numpy as np
 from pod.ai.action_discretizer import ActionDiscretizer
 from pod.ai.misc_controllers import DeepController
+from pod.ai.rewards import RewardFunc
 from pod.ai.vectorizer import Vectorizer, V4
 from pod.board import PodBoard
 from pod.util import PodState
@@ -17,7 +18,7 @@ class DeepRewardController(DeepController):
     """
     def __init__(self,
                  board: PodBoard,
-                 reward_func: Callable[[PodBoard, PodState, PodState], float],
+                 reward_func: RewardFunc,
                  model=None,
                  discretizer: ActionDiscretizer = ActionDiscretizer(),
                  vectorizer: Vectorizer = V4()):

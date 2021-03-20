@@ -1,8 +1,8 @@
-from typing import Callable, Tuple, Dict
+from typing import Tuple, Dict
 
-from pod.ai.action_discretizer import ActionDiscretizer
-from pod.board import PodBoard, PlayOutput
-from pod.controller import Controller
+from pod.ai.action_discretizer import ActionDiscretizer, DiscreteActionController
+from pod.ai.rewards import RewardFunc
+from pod.board import PodBoard
 from pod.util import PodState
 
 
@@ -39,7 +39,7 @@ class _Node:
         else:
             # Our children are leaf nodes. Evaluate them.
             for child in self.children:
-                child.score = self.ts.reward_func(self.ts.board, self.pod, child.pod)
+                child.score = self.ts.reward_func(self.ts.board, child.pod)
 
         # Now, set our own score to the best child score
         self.score = max(child.score for child in self.children)
@@ -59,14 +59,13 @@ class _Node:
 
 #################################################
 
-class TreeSearchController(Controller):
+class TreeSearchController(DiscreteActionController):
     def __init__(self,
                  board: PodBoard,
-                 reward_func: Callable[[PodBoard, PodState, PodState], float],
+                 reward_func: RewardFunc,
                  max_depth: int = 4,
-                 ad: ActionDiscretizer = ActionDiscretizer(3, 3)):
-        super().__init__(board)
-        self.ad = ad
+                 ad: ActionDiscretizer = ActionDiscretizer()):
+        super().__init__(board, ad)
         self.max_depth = max_depth
         self.reward_func = reward_func
         self.root = None
@@ -75,7 +74,7 @@ class TreeSearchController(Controller):
     def reset(self):
         self.root = None
 
-    def play(self, pod: PodState) -> PlayOutput:
+    def get_action(self, pod: PodState) -> int:
         # Explore ahead
         if self.root is None or pod != self.root.pod:
             self.root = _Node(pod, self)
@@ -86,7 +85,7 @@ class TreeSearchController(Controller):
         self.root = node
         self.last_action = action
 
-        return self.ad.action_to_output(action, pod.angle, pod.pos)
+        return action
 
     def record(self, log: Dict):
         super().record(log)

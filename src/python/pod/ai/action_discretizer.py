@@ -1,9 +1,10 @@
 import math
-from typing import Tuple, Callable
+from typing import Tuple
 
+from pod.ai.rewards import RewardFunc
 from pod.board import PodBoard
 from pod.constants import Constants
-from pod.controller import PlayOutput
+from pod.controller import PlayOutput, Controller
 from pod.util import PodState
 from vec2 import Vec2, UNIT
 
@@ -59,7 +60,7 @@ class ActionDiscretizer:
     def get_best_action(self,
                         board: PodBoard,
                         pod: PodState,
-                        reward_func: Callable[[PodBoard, PodState, PodState], float]
+                        reward_func: RewardFunc
                         ) -> int:
         """
         Get the action that will result in the highest reward for the given state
@@ -69,10 +70,27 @@ class ActionDiscretizer:
 
         for action in range(self.num_actions):
             play = self.action_to_output(action, pod.angle, pod.pos)
-            next_pod = board.step(pod, play, PodState())
-            reward = reward_func(board, pod, next_pod)
+            next_pod = board.step(pod, play)
+            reward = reward_func(board, next_pod)
             if reward > best_reward:
                 best_reward = reward
                 best_action = action
 
         return best_action
+
+class DiscreteActionController(Controller):
+    """
+    A Controller that chooses a play from a discretized subset of the Action space
+    """
+    def __init__(self, board: PodBoard, ad: ActionDiscretizer):
+        super().__init__(board)
+        self.ad = ad
+
+    def get_action(self, pod: PodState) -> int:
+        """
+        Get the discrete action value for the play that this Controller will make
+        """
+        pass
+
+    def play(self, pod: PodState) -> PlayOutput:
+        return self.ad.action_to_output(self.get_action(pod), pod.angle, pod.pos)
