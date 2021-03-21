@@ -1,4 +1,4 @@
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from time import perf_counter
 from typing import List, Tuple
 
@@ -99,10 +99,11 @@ class DeepTreeController(DeepController):
 
         return model
 
-    def __build_labels(self, pods: List[Tuple[PodState, List[float]]], n_proc: int = 12) -> List[int]:
+    def __build_labels(self, pods: List[Tuple[PodState, List[float]]]) -> List[int]:
         """
         Using the given reward func, get labels (target actions) for each state
         """
+        n_proc = cpu_count()
         data = np.array_split(pods, n_proc)
 
         model_path = '/tmp/deep_tree_controller.hdf5'
