@@ -61,6 +61,12 @@ class Vec2Test(TestCase):
         self.assertEqual(diff.x, -2)
         self.assertEqual(diff.y, -3)
 
+    def test_sub_scalar_works(self):
+        v1 = Vec2(1, 2)
+        diff = v1 - 3
+        self.assertEqual(diff.x, -2)
+        self.assertEqual(diff.y, -1)
+
     def test_length_works(self):
         v = Vec2(3, -4)
         self.assertEqual(v.length(), 5)

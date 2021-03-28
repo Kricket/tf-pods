@@ -4,7 +4,7 @@ from pod.board import PodBoard
 from pod.util import PodState
 
 
-class RewardController(DiscreteActionController):
+class GreedyController(DiscreteActionController):
     """
     A Controller that always takes the action that will produce the highest reward
     """

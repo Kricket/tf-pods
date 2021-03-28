@@ -78,6 +78,34 @@ class PodBoard:
 
         return PodBoard([check + Vec2(x_start, 0)  for check in checks])
 
+    @staticmethod
+    def tester() -> 'PodBoard':
+        """
+        Generate a board laid out to test as many situations as possible
+        (start) -> 0 -> 1: straight line
+        1 -> 2: 180° turn
+        2 -> 3: 90° turn
+        3 -> 4 -> 5 -> 6: curve around to the right
+        6 -> 7 (start): curve to the left
+        """
+        checks = []
+        start = Vec2(Constants.world_x() / 10, Constants.world_y() / 2)
+        checks.append(start + Vec2(5000, 0)) # straight ahead
+        checks.append(checks[-1] + Vec2(6000, 0)) # straight ahead
+
+        checks.append(checks[-1] + Vec2(-3000, 0)) # straight back
+
+        checks.append(checks[-1] + Vec2(0, 2500)) # turn 90°
+
+        checks.append(checks[-1] + Vec2(-3000, 1500)) # curve around
+        checks.append(checks[-1] + Vec2(-3000, -1500)) # curve around
+        checks.append(checks[-1] + Vec2(0, -5500)) # curve around
+
+        checks.append(start) # turn other way
+
+        return PodBoard(checks)
+
+
     def __init__(self, checks: List[Vec2] = None):
         if checks is None:
             self.__generate_random_checks()

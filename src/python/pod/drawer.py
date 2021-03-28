@@ -115,10 +115,10 @@ class Drawer:
 
         self.hist: List[List[Dict]] = []
 
-    def record(self, max_frames: int = 1000, max_laps: int = 5, reset: bool = True):
+    def record(self, max_turns: int = 1000, max_laps: int = 5, reset: bool = True):
         """
         Record and cache a run through the game with the current players
-        :param max_frames: Maximum number of turns
+        :param max_turns: Maximum number of turns
         :param max_laps: Maximum number of laps
         :param reset: Whether to reset the players
         """
@@ -128,7 +128,7 @@ class Drawer:
         log = JupyterLog()
         start = perf_counter()
 
-        while max(p.pod.laps for p in self.players) < max_laps and len(self.hist) < max_frames:
+        while max(p.pod.laps for p in self.players) < max_laps and len(self.hist) < max_turns:
             log.replace("Playing turn {}".format(len(self.hist) + 1))
             turnlog = []
             for p in self.players:
@@ -186,14 +186,14 @@ class Drawer:
         plt.show()
 
     def animate(self,
-                max_frames: int = 1000,
+                max_turns: int = 1000,
                 max_laps: int = 5,
                 as_gif = False,
                 filename = '/tmp/pods',
                 reset: bool = True,
                 trail_len: int = 20,
                 highlight_checks: bool = False,
-                show_vel: bool = True,
+                show_vel: bool = False,
                 fps: int = 10):
         """
         Generate an animated GIF of the players running through the game
@@ -201,13 +201,13 @@ class Drawer:
         :param highlight_checks If true, a pod's next check will change to the pod's color
         :param trail_len Number of turns behind the pod to show its path
         :param as_gif If True, generate a GIF, otherwise an HTML animation
-        :param max_frames Max number of turns to play
+        :param max_turns Max number of turns to play
         :param max_laps Max number of laps for any player
         :param filename Where to store the generated file
         :param reset Whether to reset the state of each Player first
         :param fps Frames per second
         """
-        if len(self.hist) < 1: self.record(max_frames, max_laps, reset)
+        if len(self.hist) < 1: self.record(max_turns, max_laps, reset)
 
         self.__prepare_for_world()
 
@@ -222,7 +222,8 @@ class Drawer:
             'trails': [],
             'vel': [],
             'count': 0,
-            'log': JupyterLog()
+            'log': JupyterLog(),
+            'turnCounter': self.ax.text(-PADDING, Constants.world_y() + PADDING, 'Turn 0', fontsize=14)
         }
 
         fa = _get_field_artist()
@@ -239,7 +240,7 @@ class Drawer:
             self.ax.add_artist(pa)
             art['pod'].append(pa)
             art['color'].append(color)
-        plt.legend(art['pod'], self.labels)
+        plt.legend(art['pod'], self.labels, loc='lower right')
 
         if trail_len > 0:
             for i in range(len(self.players)):
@@ -256,7 +257,7 @@ class Drawer:
                 art['vel'].append(line)
 
         all_updates = [
-            fa, *art['check'], *art['pod'], *art['trails'], *art['vel']
+            fa, *art['check'], *art['pod'], *art['trails'], *art['vel'], art['turnCounter']
         ]
 
         #########################################
@@ -300,6 +301,9 @@ class Drawer:
             # Update the check colors
             if highlight_checks:
                 for col, check_art in zip(check_colors, art['check']): check_art.set_color(col)
+
+            # Update the turn counter
+            art['turnCounter'].set_text('Turn ' + str(frame_idx))
 
             return all_updates
 
