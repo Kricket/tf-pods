@@ -1,5 +1,6 @@
 import math
 from pathlib import Path
+from time import perf_counter
 from typing import List, Tuple, Dict
 
 import matplotlib.pyplot as plt
@@ -114,7 +115,7 @@ class Drawer:
 
         self.hist: List[List[Dict]] = []
 
-    def record(self, max_frames: int = 200, max_laps: int = 5, reset: bool = True):
+    def record(self, max_frames: int = 1000, max_laps: int = 5, reset: bool = True):
         """
         Record and cache a run through the game with the current players
         :param max_frames: Maximum number of turns
@@ -125,6 +126,7 @@ class Drawer:
         self.hist = [[p.record() for p in self.players]]
 
         log = JupyterLog()
+        start = perf_counter()
 
         while max(p.pod.laps for p in self.players) < max_laps and len(self.hist) < max_frames:
             log.replace("Playing turn {}".format(len(self.hist) + 1))
@@ -133,6 +135,9 @@ class Drawer:
                 p.step()
                 turnlog.append(p.record())
             self.hist.append(turnlog)
+
+        end = perf_counter()
+        print("%i turns generated in %.3f seconds" % (len(self.hist), (end - start)))
 
     def __prepare_for_world(self):
         _prepare_size()
@@ -165,28 +170,23 @@ class Drawer:
             self.ax.add_artist(circle)
 
         if pods is None:
-            for (idx, player) in enumerate(self.players):
-                self.ax.add_artist(_get_pod_artist(player.pod, _gen_color(idx)))
+            pod_artists = [
+                _get_pod_artist(player.pod, _gen_color(idx))
+                for (idx, player) in enumerate(self.players)
+            ]
         else:
-            for (idx, pod) in enumerate(pods):
-                self.ax.add_artist(_get_pod_artist(pod, _gen_color(idx)))
+            pod_artists = [
+                _get_pod_artist(pod, _gen_color(idx))
+                for (idx, pod) in enumerate(pods)
+            ]
+
+        for pa in pod_artists: self.ax.add_artist(pa)
+        plt.legend(pod_artists, self.labels)
 
         plt.show()
 
-    def __get_frames(self, max_frames: int, max_laps: int):
-        log = JupyterLog()
-
-        frames = []
-        while max(p.pod.laps for p in self.players) < max_laps and len(frames) < max_frames:
-            log.replace("Generating frame {}".format(len(frames)))
-            for p in self.players:
-                p.step()
-            states = map(lambda pl: _pod_wedge_info(pl.pod), self.players)
-            frames.append(enumerate(list(states)))
-        return frames
-
     def animate(self,
-                max_frames: int = 200,
+                max_frames: int = 1000,
                 max_laps: int = 5,
                 as_gif = False,
                 filename = '/tmp/pods',
