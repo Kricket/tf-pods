@@ -12,6 +12,7 @@ from pod.util import PodState, clean_angle
 #################################################
 
 RewardFunc = Callable[[PodBoard, PodState], float]
+DIST_BASE = math.sqrt(Constants.world_x() * Constants.world_y())
 
 def pgr(board: PodBoard, pod: PodState) -> float:
     """
@@ -35,14 +36,23 @@ def regood(board: PodBoard, pod: PodState) -> float:
     # This scales, not by a fixed MAX_DIST, but relative to the distance between the checks.
     # So right after hitting a check, this should be about 1 (slightly off since we hit the
     # edge of the check, not the center)
-    dist_penalty = math.sqrt(pod_to_check.square_length() / prev_to_check.square_length())
+#    dist_penalty = math.sqrt(pod_to_check.square_length() / prev_to_check.square_length())
+    # Nope...just make it absolute
+    dist_penalty = pod_to_check.length() / DIST_BASE
 
     # Bonus for each check hit. By making it 2 per check, we ensure that the reward is always
     # higher after hitting a check. (If left at 1, the dist_penalty could be slightly greater
     # than 1, leading to a DECREASE in reward for hitting a check)
     checks_hit = len(board.checkpoints) * pod.laps + pod.nextCheckId
 
-    return 2 * checks_hit + 1 - dist_penalty
+    # A tiny bit for the angle. This should really be tiny - its purpose is to serve as a
+    # tie-breaker (to prevent the pod from going into orbit around a check).
+    angle = math.fabs(clean_angle(pod_to_check.angle() - pod.angle))
+    a_penalty = (angle / math.pi) / 10 if angle > Constants.max_turn() else 0
+
+    return 3 * (checks_hit + 1) \
+           - dist_penalty \
+           - a_penalty
 
 
 #################################################

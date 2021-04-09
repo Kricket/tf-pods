@@ -1,5 +1,7 @@
 import math
-from typing import Tuple
+from typing import Tuple, List
+
+import numpy as np
 
 from pod.ai.rewards import RewardFunc
 from pod.board import PodBoard
@@ -7,6 +9,14 @@ from pod.constants import Constants
 from pod.controller import PlayOutput, Controller
 from pod.util import PodState
 from vec2 import Vec2, UNIT
+
+
+def _arange(start: float, stop: float, num_steps: int) -> List[float]:
+    """
+    Cut the given range into the given number of steps, INCLUSIVE of the endpoints
+    """
+    step_size = (stop - start) / (num_steps - 1)
+    return [x for x in np.arange(start, stop + (step_size / 5), step_size)]
 
 
 class ActionDiscretizer:
@@ -18,8 +28,9 @@ class ActionDiscretizer:
         self.num_angle = num_angle
         self.num_actions = num_thrust * num_angle
 
-        self._thrust_inc = Constants.max_thrust() / (self.num_thrust - 1)
-        self._angle_inc = Constants.max_turn() * 2 / (self.num_angle - 1)
+        thrusts = _arange(0, Constants.max_thrust(), num_thrust)
+        angs = _arange(-Constants.max_turn(), Constants.max_turn(), num_angle)
+        self._action_table = [(int(thr), ang) for thr in thrusts for ang in angs]
 
     def play_to_action(self, thrust: int, angle: float) -> int:
         """
@@ -33,13 +44,9 @@ class ActionDiscretizer:
 
     def action_to_play(self, action: int) -> Tuple[int, float]:
         """
-        Convert an action (in [0, THRUST_VALUES * ANGLE_VALUES - 1]) into the thrust, angle to play
+        Convert an action (in range(0, num_actions)) into the thrust, angle to play
         """
-        # An integer in [0, THRUST_VALUES - 1]
-        thrust_idx = int(action / self.num_angle)
-        # An integer in [0, ANGLE_VALUES - 1]
-        angle_idx = action % self.num_angle
-        return thrust_idx * self._thrust_inc, angle_idx * self._angle_inc - Constants.max_turn()
+        return self._action_table[action]
 
     def action_to_output(self, action: int, pod_angle: float, pod_pos: Vec2, po: PlayOutput = None) -> PlayOutput:
         """
@@ -77,6 +84,10 @@ class ActionDiscretizer:
                 best_action = action
 
         return best_action
+
+    def __str__(self):
+        return 'AD(thr={} ang={})'.format(self.num_thrust, self.num_angle)
+
 
 class DiscreteActionController(Controller):
     """

@@ -140,7 +140,6 @@ class Drawer:
         print("%i turns generated in %.3f seconds" % (len(self.hist), (end - start)))
 
     def __prepare_for_world(self):
-        _prepare_size()
         self.fig = plt.figure()
         self.ax = plt.axes(
             xlim=(-PADDING, Constants.world_x() + PADDING),
@@ -154,7 +153,7 @@ class Drawer:
                 p.reset()
 
     def __draw_check(self, check: Vec2, idx: int) -> Circle:
-        self.ax.annotate(str(idx), xy=(check.x, check.y), fontsize=20, ha="center")
+        self.ax.annotate(str(idx), xy=(check.x, check.y), ha="center", fontsize=14)
         return Circle((check.x, check.y), Constants.check_radius())
 
     def draw_frame(self, pods = None):
@@ -209,6 +208,7 @@ class Drawer:
         """
         if len(self.hist) < 1: self.record(max_turns, max_laps, reset)
 
+        _prepare_size()
         self.__prepare_for_world()
 
         #########################################
@@ -334,7 +334,6 @@ class Drawer:
         Display a graph of the rewards for each player at each turn
         """
         if len(self.hist) < 1: self.record()
-        _prepare_size()
 
         for (player_idx, player) in enumerate(self.players):
             rewards = []
@@ -355,9 +354,15 @@ class Drawer:
 
     def compare_rewards(self,
                         rewarders: List[Tuple[str, RewardFunc]],
-                        players: List[int] = None):
+                        players: List[int] = None,
+                        max_turns: int = 1000,
+                        max_laps: int = 5,
+                        reset: bool = True):
         """
         Compare the reward function for the given players
+        :param reset:
+        :param max_laps:
+        :param max_turns:
         :param rewarders: Reward functions to graph, with their labels
         :param players: Indices of the players to graph
         """
@@ -365,8 +370,7 @@ class Drawer:
         if players is None:
             players = [i for i in range(len(self.players))]
 
-        if len(self.hist) < 1: self.record()
-        _prepare_size()
+        if len(self.hist) < 1: self.record(max_turns, max_laps, reset)
 
         ticks = []
         tick_labels = []
@@ -375,7 +379,6 @@ class Drawer:
             ticks.append(step)
             tick_labels.append(str(step))
             tick_colors.append('black')
-
 
         for (p_idx, player) in enumerate(players):
             for (r_idx, r_def) in enumerate(rewarders):
@@ -391,8 +394,8 @@ class Drawer:
                         tick_labels.append("Check {}".format(prev_pod.nextCheckId))
                         tick_colors.append(player_color)
                 plt.plot(rewards,
-                     color=player_color,
-                     label="{} - {}".format(self.labels[p_idx], r_def[0]))
+                         color=player_color,
+                         label="{} - {}".format(self.labels[p_idx], r_def[0]))
 
         plt.legend(loc="lower right")
         plt.ylabel('Reward')

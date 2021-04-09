@@ -2,10 +2,18 @@ import math
 from unittest import TestCase
 
 from pod.ai.action_discretizer import ActionDiscretizer
+from pod.ai.rewards import dist_reward, make_reward, ang_reward
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.util import PodState
 from vec2 import Vec2
+
+
+# The test reward includes the angle, so we can test that it turns correctly
+_test_reward = make_reward([
+    (1.0, ang_reward),
+    (1.0, dist_reward)
+])
 
 
 class ActionDiscretizerTest(TestCase):
@@ -46,6 +54,7 @@ class ActionDiscretizerTest(TestCase):
         self.assertEqual(angle, 0)
 
     def test_actions_produce_all_possible_combinations(self):
+        # First, collect all unique values
         outputs = set()
         angles = set()
         thrusts = set()
@@ -55,14 +64,19 @@ class ActionDiscretizerTest(TestCase):
             angles.add(angle)
             thrusts.add(thrust)
 
+        # Ensure that we have the correct number of each
         self.assertEqual(len(outputs), self.ad.num_actions)
         self.assertEqual(len(angles), self.ad.num_angle)
         self.assertEqual(len(thrusts), self.ad.num_thrust)
 
+        # Ensure that each possibility is present
+        thrust_inc = Constants.max_thrust() / (self.ad.num_thrust - 1)
         for t in range(0, self.ad.num_thrust):
-            self.assertTrue((self.ad._thrust_inc * t) in thrusts)
+            self.assertIn(t * thrust_inc, thrusts)
+
+        ang_inc = (Constants.max_turn() * 2) / (self.ad.num_angle - 1)
         for a in range(0, self.ad.num_angle):
-            self.assertTrue((self.ad._angle_inc * a - Constants.max_turn()) in angles)
+            self.assertIn(a * ang_inc - Constants.max_turn(), angles)
 
     def test_action_to_output_simple(self):
         action = self.ad.play_to_action(100, 0)
@@ -98,7 +112,7 @@ class ActionDiscretizerTest(TestCase):
         self.assertGreater(rel_target.x, 1)
 
     def __do_get_best_action_assert(self, board, pod, exp_thrust, exp_angle):
-        action = self.ad.get_best_action(board, pod)
+        action = self.ad.get_best_action(board, pod, _test_reward)
 
         thrust, angle = self.ad.action_to_play(action)
 
