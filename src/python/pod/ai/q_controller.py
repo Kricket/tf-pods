@@ -20,13 +20,12 @@ def _to_state(board: PodBoard, pod: PodState) -> Tuple[int,int,int,int]:
     vel = pod.vel.rotate(-pod.angle)
 
     check1 = (board.get_check(pod.nextCheckId) - pod.pos).rotate(-pod.angle)
-#    check1_to_2 = board.get_check(pod.nextCheckId + 1) - board.checkpoints[pod.nextCheckId]
 
     return (
         _discretize(vel.x / Constants.max_vel(), 10),
         _discretize(vel.y / Constants.max_vel(), 10),
-        _discretize(check1.x / MAX_DIST, 20),
-        _discretize(check1.y / MAX_DIST, 20),
+        _discretize(check1.x / MAX_DIST, 30),
+        _discretize(check1.y / MAX_DIST, 30),
     )
 
 

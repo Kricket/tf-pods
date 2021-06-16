@@ -31,18 +31,21 @@ class DeepQController(DiscreteActionController):
             tf.keras.layers.Dense(
                 48,
                 input_shape=(self.vectorizer.vec_len(),),
-                kernel_initializer="zeros",
                 activation=tf.keras.layers.LeakyReLU(alpha=0.01),
             ),
             tf.keras.layers.Dense(
                 32,
                 input_shape=(self.vectorizer.vec_len(),),
-                kernel_initializer="zeros",
+                activation=tf.keras.layers.LeakyReLU(alpha=0.01),
+            ),
+            tf.keras.layers.Dense(
+                32,
+                input_shape=(self.vectorizer.vec_len(),),
                 activation=tf.keras.layers.LeakyReLU(alpha=0.01),
             ),
             tf.keras.layers.Dense(
                 self.ad.num_actions,
-                activation=tf.keras.layers.LeakyReLU(alpha=0.01),
+                activation='linear',
             ),
         ])
 
@@ -63,12 +66,14 @@ class DeepQController(DiscreteActionController):
             state_vec = self.vectorizer.to_vector(self.board, pod)
         return self.model(tf.constant([state_vec]))
 
-    def __get_best_action(self, pod: PodState = None, state_vec = None):
+    def __get_best_action(self, pod: PodState = None, state_vec = None) -> int:
         """
         Get the action that produces the highest Q-value
         """
         output = self.__get_output(pod, state_vec)
-        return np.argmax(output)
+        argmax = np.argmax(output)
+#        print("Action {} because output {}".format(argmax, output))
+        return argmax
 
     def __get_initial_pod(self) -> Tuple[PodState, List[float]]:
         # The pod starts in a random position at a random distance from the check,
@@ -89,7 +94,7 @@ class DeepQController(DiscreteActionController):
         if random.random() < prob_rand:
             return math.floor(random.random() * self.ad.num_actions)
         else:
-            return np.argmax(self.__get_best_action(state_vec=state))
+            return self.__get_best_action(state_vec=state)
 
     def __step(self, pod: PodState, action: int) -> Tuple[PodState, List[float], float]:
         """
@@ -107,7 +112,8 @@ class DeepQController(DiscreteActionController):
             action = self.__choose_action(current_state, prob_rand_action)
             next_pod, next_state, reward = self.__step(pod, action)
 
-            self.replay.add((current_state, action, reward, next_state))
+#            self.replay.add((current_state, action, reward, next_state))
+            self.replay.add((pod, current_state))
 
             total_reward += reward
 
@@ -119,31 +125,47 @@ class DeepQController(DiscreteActionController):
 
         return total_reward
 
-    def __get_full_target_output(self, future_discount: float, pod):
+    def __get_q_update(self, next_state, reward: float, future_discount: float):
+        return reward + future_discount * np.max(self.__get_output(state_vec=next_state))
+
+    def __get_full_target_output(self, future_discount: float, pod: PodState) -> List[List[float]]:
         """
         For the given pod, get the target Q-values for every possible action.
         """
         target_q_values = []
         for action in range(self.ad.num_actions):
             next_pod, next_state, reward = self.__step(pod, action)
-            max_next_q = np.max(self.__get_output(state_vec=next_state))
-            target_q_values.append(reward + future_discount * max_next_q)
+            target_q_values.append(self.__get_q_update(next_state, reward, future_discount))
+#            max_next_q = np.max(self.__get_output(state_vec=next_state))
+#            target_q_values.append(reward + future_discount * max_next_q)
 
         return [target_q_values]
 
-    def __get_single_target_output(self, state, action, reward, next_state, future_discount):
+    def __get_single_target_output(self,
+                                   state,
+                                   action: int,
+                                   reward: float,
+                                   next_state,
+                                   future_discount: float
+                                   ) -> List[List[float]]:
         """
         Get the target output, with a single value updated, for the given conditions
         """
         q_vec = self.__get_output(state_vec=state).numpy()
-        q_vec[0][action] = reward + future_discount * np.max(self.__get_output(state_vec=next_state))
+        q_vec[0][action] = self.__get_q_update(next_state, reward, future_discount)
+            #reward + future_discount * np.max(self.__get_output(state_vec=next_state))
         return q_vec
 
     def __learn(self, future_discount: float):
-        inputs = [state for state, action, reward, next_state in self.replay.buffer]
+#        inputs = [state for state, action, reward, next_state in self.replay.buffer]
+        inputs = [state for pod, state in self.replay.buffer]
+
+        print("Generating targets for {} states...".format(len(inputs)))
         targets = [
-            self.__get_single_target_output(state, action, reward, next_state, future_discount)
-            for state, action, reward, next_state in self.replay.buffer
+            self.__get_full_target_output(future_discount, pod)
+            for pod, state in self.replay.buffer
+#            self.__get_single_target_output(state, action, reward, next_state, future_discount)
+#            for state, action, reward, next_state in self.replay.buffer
         ]
 
         history = self.model.fit(
@@ -159,7 +181,8 @@ class DeepQController(DiscreteActionController):
               exploration_episodes: int = 50,
               epsilon_decay: float = 0.95,
               max_turns: int = 40,
-              future_discount: float = 0.7):
+              future_discount: float = 0.7
+              ):
         reward_per_ep = []
         accuracy = []
         epsilon = 1.0
@@ -194,7 +217,8 @@ class DeepQController(DiscreteActionController):
             for pod, current_state in zip(pods, pod_states):
                 action = self.__choose_action(current_state, epsilon)
                 next_pod, next_state, reward = self.__step(pod, action)
-                self.replay.add(current_state, action, reward, next_state)
+                self.replay.add((pod, current_state))
+#                self.replay.add(current_state, action, reward, next_state)
 
             accuracy += self.__learn(future_discount)
 

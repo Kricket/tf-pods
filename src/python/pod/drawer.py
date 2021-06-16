@@ -160,6 +160,7 @@ class Drawer:
         """
         Draw a single frame of the game in its current state (board, players)
         """
+        _prepare_size()
         self.__prepare_for_world()
 
         self.ax.add_artist(_get_field_artist())

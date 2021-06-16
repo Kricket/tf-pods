@@ -29,15 +29,32 @@ def pgr(board: PodBoard, pod: PodState) -> float:
 
     return 2*checks_hit - dist_estimate + 1
 
-def regood(board: PodBoard, pod: PodState) -> float:
-    pod_to_check = board.checkpoints[pod.nextCheckId] - pod.pos
-    prev_to_check = board.checkpoints[pod.nextCheckId] - board.get_check(pod.nextCheckId-1)
+###############################################################################
+# Pre-baked rewards
+#
+# d = distance - is important because it rewards getting closer to the check
+# c = checks - is important because distance suddenly gets worse after hitting a check
+# a = angle - a tiny amount to nudge the agent to turn toward the check
+# t = turns - penalty for sloth: hurry up!
+#
+###############################################################################
 
-    # This scales, not by a fixed MAX_DIST, but relative to the distance between the checks.
-    # So right after hitting a check, this should be about 1 (slightly off since we hit the
-    # edge of the check, not the center)
-#    dist_penalty = math.sqrt(pod_to_check.square_length() / prev_to_check.square_length())
-    # Nope...just make it absolute
+def re_dca(board: PodBoard, pod: PodState) -> float:
+    checks_hit = len(board.checkpoints) * pod.laps + pod.nextCheckId
+
+    pod_to_check = board.checkpoints[pod.nextCheckId] - pod.pos
+
+    angle = math.fabs(clean_angle(pod_to_check.angle() - pod.angle))
+    a_penalty = (angle / math.pi) / 10 if angle > Constants.max_turn() else 0
+
+    dist_penalty = pod_to_check.length() / DIST_BASE
+
+    return 3 * (checks_hit + 1) - dist_penalty - a_penalty
+
+def re_dcat(board: PodBoard, pod: PodState) -> float:
+    pod_to_check = board.checkpoints[pod.nextCheckId] - pod.pos
+
+    # Scaled distance to next check
     dist_penalty = pod_to_check.length() / DIST_BASE
 
     # Bonus for each check hit. By making it 2 per check, we ensure that the reward is always
@@ -50,9 +67,15 @@ def regood(board: PodBoard, pod: PodState) -> float:
     angle = math.fabs(clean_angle(pod_to_check.angle() - pod.angle))
     a_penalty = (angle / math.pi) / 10 if angle > Constants.max_turn() else 0
 
+    # And finally: this can be important to prevent agents from doing nothing.
+    # The reduction factor is slightly more than the number of turns it takes
+    # (on average) to get from one check to another
+    turn_penalty = pod.turns / 20
+
     return 3 * (checks_hit + 1) \
            - dist_penalty \
-           - a_penalty
+           - a_penalty \
+           - turn_penalty
 
 
 #################################################
