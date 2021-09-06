@@ -5,7 +5,7 @@ from typing import List, Tuple
 import numpy as np
 from pod.ai.action_discretizer import ActionDiscretizer
 from pod.ai.ai_utils import MAX_DIST
-from pod.ai.rewards import RewardFunc, check_reward, speed_reward
+from pod.ai.rewards import RewardFunc, check_reward, speed_reward, check_and_speed_reward
 from pod.board import PodBoard
 from pod.constants import Constants
 from pod.controller import Controller, PlayOutput
@@ -27,13 +27,6 @@ def _to_state(board: PodBoard, pod: PodState) -> Tuple[int,int,int,int]:
         _discretize(check1.x / MAX_DIST, 30),
         _discretize(check1.y / MAX_DIST, 30),
     )
-
-
-def check_and_speed_reward(board: PodBoard, pod: PodState) -> float:
-    rew = check_reward(board, pod)
-    if rew > 0:
-        rew += speed_reward(board, pod)
-    return rew
 
 
 class QController(Controller):

@@ -138,5 +138,17 @@ def speed_reward(board: PodBoard, next_pod: PodState) -> float:
     dist_to_check = pod_to_check.length()
 
     # a*b = |a|*|b|*cos
-    # Thus, vel*check / dist = how much the vel is taking us toward the check
+    # Thus, vel*check / dist = vel component going towards the check
     return (next_pod.vel * pod_to_check) / (dist_to_check * Constants.max_vel())
+
+def check_and_speed_reward(board: PodBoard, pod: PodState) -> float:
+    """
+    Like check_reward, but if past the first checkpoint, also adds the speed_reward.
+
+    This is mostly useful for testing/training, in situations where the simulation
+    stops upon hitting the first check.
+    """
+    rew = check_reward(board, pod)
+    if rew > 0:
+        rew += speed_reward(board, pod)
+    return rew
