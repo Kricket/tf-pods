@@ -77,6 +77,25 @@ def re_dcat(board: PodBoard, pod: PodState) -> float:
            - a_penalty \
            - turn_penalty
 
+def check_and_speed_reward(board: PodBoard, pod: PodState) -> float:
+    """
+    Like check_reward, but if past the first checkpoint, also adds the speed_reward.
+
+    This is mostly useful for testing/training, in situations where the simulation
+    stops upon hitting the first check.
+    """
+    rew = check_reward(board, pod)
+    if rew > 0:
+        rew += speed_reward(board, pod)
+    return rew
+
+def re_cts(board: PodBoard, pod: PodState) -> float:
+    checks_hit = len(board.checkpoints) * pod.laps + pod.nextCheckId
+    turn_penalty = pod.turns / 20
+    speed = speed_reward(board, pod)
+
+    return checks_hit + speed - turn_penalty
+
 
 #################################################
 # These are for experimenting...
@@ -140,15 +159,3 @@ def speed_reward(board: PodBoard, next_pod: PodState) -> float:
     # a*b = |a|*|b|*cos
     # Thus, vel*check / dist = vel component going towards the check
     return (next_pod.vel * pod_to_check) / (dist_to_check * Constants.max_vel())
-
-def check_and_speed_reward(board: PodBoard, pod: PodState) -> float:
-    """
-    Like check_reward, but if past the first checkpoint, also adds the speed_reward.
-
-    This is mostly useful for testing/training, in situations where the simulation
-    stops upon hitting the first check.
-    """
-    rew = check_reward(board, pod)
-    if rew > 0:
-        rew += speed_reward(board, pod)
-    return rew
