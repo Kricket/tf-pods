@@ -92,6 +92,30 @@ def _vel_coords(pod: PodState) -> Tuple[List[float], List[float]]:
     )
 
 
+def draw_board(board: PodBoard):
+    """
+    Just draw the board, with no pods.
+    TODO: refactor this with the Drawer
+    """
+    _prepare_size()
+
+    #fig = plt.figure()
+    ax = plt.axes(
+        xlim=(-PADDING, Constants.world_x() + PADDING),
+        ylim=(-PADDING, Constants.world_y() + PADDING)
+    )
+    ax.invert_yaxis()
+
+    ax.add_artist(_get_field_artist())
+
+    for (idx, check) in enumerate(board.checkpoints):
+        ax.annotate(str(idx), xy=(check.x, check.y), ha="center", fontsize=14)
+        circle = Circle((check.x, check.y), Constants.check_radius())
+        ax.add_artist(circle)
+
+    plt.show()
+
+
 class Drawer:
     def __init__(self,
                  board: PodBoard,

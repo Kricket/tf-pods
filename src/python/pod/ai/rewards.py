@@ -39,6 +39,14 @@ def pgr(board: PodBoard, pod: PodState) -> float:
 #
 ###############################################################################
 
+def re_dc(board: PodBoard, pod: PodState) -> float:
+    checks_hit = len(board.checkpoints) * pod.laps + pod.nextCheckId
+
+    pod_to_check = board.checkpoints[pod.nextCheckId] - pod.pos
+    dist_penalty = pod_to_check.length() / DIST_BASE
+
+    return 3 * (checks_hit + 1) - dist_penalty
+
 def re_dca(board: PodBoard, pod: PodState) -> float:
     checks_hit = len(board.checkpoints) * pod.laps + pod.nextCheckId
 

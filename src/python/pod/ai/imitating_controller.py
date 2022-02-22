@@ -97,13 +97,8 @@ class ImitatingController(DeepController):
                 activation=tf.keras.layers.LeakyReLU(alpha=0.1),
             ),
             tf.keras.layers.Dense(
-                64,
-                input_shape=(self.vectorizer.vec_len(),),
-                activation=tf.keras.layers.LeakyReLU(alpha=0.1),
-            ),
-            tf.keras.layers.Dense(
                 48,
-                activation=tf.keras.layers.LeakyReLU(alpha=0.1),
+                activation='tanh',
             ),
             tf.keras.layers.Dense(
                 32,
