@@ -7,7 +7,7 @@ networks:
 services:
   tf:
     container_name: tf
-    image: "tensorflow/tensorflow:2.6.0rc1-jupyter"
+    image: "tensorflow/tensorflow:2.7.0-jupyter"
     ports:
       - "8888:8888"
     environment:
@@ -15,4 +15,4 @@ services:
     volumes:
       - "./src/notebooks:/tf/notebooks"
       - "./src/python:/src"
-      - "./pip:/pip"
+#      - "./pip:/pip"
